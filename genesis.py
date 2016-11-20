@@ -10,6 +10,7 @@ import operator
 
 # G todo: add some reusable way of mutating parameters. maybe using the Beta function?
 
+
 def binary_activation(input_value):
     return 0 if input_value <= 0 else 1
 
@@ -29,35 +30,6 @@ def convert_to_delta_distance(distance, angle):
 
 def clip(number, min_value, max_value):
     return min(max(number, min_value), max_value)
-
-
-def render(shapes_to_render, pixels, additionals, output_width, output_height, x_init, y_init, width, height):
-    x_step_size = width / output_width
-    y_step_size = height / output_height
-    line = "#"+"-"*output_width+"#\n"
-    text = ""
-    for additional in additionals:
-        text_line = ""
-        first = True
-        for value in additional:
-            if not first:
-                text_line += ", "
-            first = False
-            text_line += value
-        text += "|"+text_line[0:output_width]+" "*(output_width-len(text_line))+"|\n"
-    out = ""
-    for y in np.arange(y_init, y_init + height, y_step_size):
-        out += "|"
-        for x in np.arange(x_init, x_init + width, x_step_size):
-            pixel = " "
-            point = shapes.Circle(x, y, 0)
-            for shape, pixel2 in zip(shapes_to_render, pixels):
-                if point.collides(shape):
-                    pixel = pixel2
-                    break
-            out += pixel
-        out += "|\n"
-    print("\n\n\n" + line + text + line + out + line)
 
 
 class Food:
@@ -89,32 +61,6 @@ class Environment:
         self._time_collision_food = 0
         self._time_collision_creatures = 0
         self._time_thinking = 0
-        self._render_delay = 100
-        self._physics_delay = 0.00
-        self._render_width = 120
-        self._render_height = 20
-
-    def listen_for_key(self):
-        def w(op): self._render_width = op(self._render_width, 10)
-        def h(op): self._render_height = op(self._render_height, 10)
-        def p(op): self._physics_delay = op(self._physics_delay, 0.1)
-        def r(op): self._render_delay = op(self._render_delay, 5)
-        commands = {"w": w, "h": h, "p": p, "r": r}
-        operators = {"+": operator.add, "-": operator.sub}
-        while True:
-            print("listening..")
-            value_input = input("command:")
-            print("read: \""+value_input+"\"")
-            if len(value_input) == 2:
-                f = commands[value_input[0]]
-                o = operators[value_input[1]]
-                if f is not None and o is not None:
-                    f(o)
-
-    def start(self):
-        self.tick()
-        t = threading.Thread(target=self.listen_for_key)
-        t.start()
 
     def queue_creature(self, creature):
         self._queued_creatures.append(creature)
@@ -142,10 +88,6 @@ class Environment:
         self._tick_count += 1
         for listener in self._tick_listeners:
             listener(self)
-        if self._running:
-            if self._tick_count % self._render_delay == 0:
-                self.render(self._render_width, self._render_height, 0, 0, self._width, self._height)
-            threading.Timer(self._physics_delay, self.tick).start()
 
     def move_creature(self, creature, distance_to_travel):
         tick = time.time()
@@ -161,14 +103,14 @@ class Environment:
         [width, height] = creature.get_body().get_shape().get_dimensions()
         if new_x+width/2 > self._width or new_x-width/2 < 0 or new_y+height/2 > self._height or new_y-height/2 < 0:
             is_valid = False
+        # if is_valid:
+        #     for other_creature in self._living_creatures:
+        #         if other_creature is not creature and translated_shape.collides(other_creature.get_body().get_shape()):
+        #             is_valid = False
+        #             #print("collision detected between "+other_creature._name+ " and "+creature._name)
+        #             break
         if is_valid:
-            for other_creature in self._living_creatures:
-                if other_creature is not creature and translated_shape.collides(other_creature.get_body().get_shape()):
-                    is_valid = False
-                    #print("collision detected between "+other_creature._name+ " and "+creature._name)
-                    break
-            if is_valid:
-                creature.get_body().set_position(new_x, new_y)
+            creature.get_body().set_position(new_x, new_y)
         self._time_collision_creatures += (time.time()-tick)
 
     def turn_creature(self, creature, angle_to_turn):
@@ -199,31 +141,6 @@ class Environment:
     def create_food(self, x, y, mass, radius):
         self._food.add(Food(mass, shapes.Circle(x, y, radius)))
 
-    def render(self, output_width, output_height, x_init, y_init, width, height):
-        shapes_to_render = []
-        pixels = []
-        top_mass_creature = None
-        top_energy_creature = None
-        for creature in self._living_creatures:
-            if top_energy_creature is None or top_energy_creature.get_energy() < creature.get_energy():
-                top_energy_creature = creature
-            if top_mass_creature is None or top_mass_creature.get_mass() < creature.get_mass():
-                top_mass_creature = creature
-            for organ in creature._organs:
-                if organ is not creature.get_body() and organ.get_shape() is not None:
-                    shapes_to_render.append(copy.deepcopy(organ.get_shape()))
-                    pixels.append("X")
-            shapes_to_render.append(copy.deepcopy(creature.get_body().get_shape()))
-            pixels.append(creature._name[len(creature._name)-1])
-        for food in self._food:
-            shapes_to_render.append(copy.deepcopy(food.get_shape()))
-            pixels.append(".")
-        additional_1 = ["width(w): "+str(self._render_width), "height(h): "+str(self._render_height),
-                        "physics delay(p): " + str(self._physics_delay), "render delay(r): " + str(self._render_delay)]
-        additional_2 = ["ticks: "+str(self._tick_count), "top mass creature: "+top_mass_creature._name, "top energy creature: "+top_energy_creature._name]
-        t = threading.Thread(target=render, args=(shapes_to_render, pixels, [additional_1, additional_2], output_width, output_height, x_init, y_init, width, height))
-        t.start()
-        print("+")
 
 class Creature:
     def __init__(self, body, name=None):
@@ -456,10 +373,6 @@ class Brain(Organ):
         Brain._connect_layer_to_neuron(self._hidden_layer, neuron)
         self.fill_hidden_layer(len(self._output_layer))
 
-    def fill_hidden_layer(self, count):
-        for i in range(len(self._hidden_layer), count):
-            self.add_hidden_neuron()
-
     def add_hidden_neuron(self, neuron=None):
         if neuron is None:
             neuron = Neuron(sigmoid_activation, "hidden "+str(len(self._hidden_layer)))
@@ -467,16 +380,20 @@ class Brain(Organ):
         Brain._connect_layer_to_neuron(self._input_layer, neuron)
         neuron.connect_to_layer(self._output_layer)
 
+    def fill_hidden_layer(self, count):
+        for i in range(len(self._hidden_layer), count):
+            self.add_hidden_neuron()
+
     @staticmethod
     def _connect_layer_to_neuron(layer, neuron):
         for neuron_from in layer:
             neuron_from.connect_to_neuron(neuron)
 
     def tick_cost(self):
-        return len(self._hidden_layer) / 10  # todo: replace with realistic tick cost
+        return len(self._hidden_layer) / 10  # G todo: replace with realistic tick cost
 
     def think(self):
-        tick = time.time()
+        #tick = time.time()
         self._bias_input_layer.receive_fire(1.)
         for input_neuron in self._input_layer:
             input_neuron.fire()
@@ -677,21 +594,21 @@ class Fission(Organ):
 
     def execute(self):
         fission_value = self._fission_neuron.consume()
-        if False:  # G todo: reenable this
+        if fission_value > 0:  # G todo: reenable this
             initial_energy = self._creature.get_body().get_energy()
             new_energy = initial_energy * 0.4
-            new_mass = self._creature.get_body().get_mass() * 0.4
+            initial_mass = self._creature.get_body().get_mass()
+            new_mass = initial_mass * 0.4
             self._creature.get_body().set_energy(new_energy)
             self._creature.get_body().set_mass(new_mass)
 
             split_creature = self._creature.clone()
 
-            split_creature.get_body().set_energy(new_energy)
-            split_creature.get_body().set_mass(new_mass)
-            split_creature._name = self._creature._name + "."
+            split_creature._name = self._creature._name + "+"
 
-            self._mutation_model.mutate(split_creature)
+            split_creature.mutate(self._mutation_model)
             self._creature.get_environment().queue_creature(split_creature)
+            #print("creature "+self._creature._name+" split itself")
 
     def tick_cost(self):
         return 0
