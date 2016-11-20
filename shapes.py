@@ -54,4 +54,3 @@ class Circle(Shape):
     def set_radius(self, radius):
         self._radius = radius
 
-        
