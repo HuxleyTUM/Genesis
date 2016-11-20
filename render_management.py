@@ -8,7 +8,7 @@ class Manager:
         self._physics = physics
         self._render = render
         self._render_delta = 1/1
-        self._physics_delta = 1/10
+        self._physics_delta = 1/2
         self._last_physics_call = -1
         self._last_render_call = -1
 
@@ -28,13 +28,13 @@ class Manager:
             if time_to_next_physics_call < time_to_next_render_call:
                 if time_to_next_physics_call > 0:
                     time.sleep(time_to_next_physics_call)
-                self._physics()
                 self._last_physics_call = time.time()
+                self._physics()
             else:
                 if time_to_next_render_call > 0:
                     time.sleep(time_to_next_render_call)
-                self._render()
                 self._last_render_call = time.time()
+                self._render()
 
 
 

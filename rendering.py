@@ -3,6 +3,7 @@ import copy
 import operator
 import shapes
 import numpy as np
+import time
 
 
 def listen_for_key(self):
@@ -32,14 +33,13 @@ class Renderer:
 
 
 class AsciiRenderer(Renderer):
-    def __init__(self, environment, render_delay = 100, physics_delay = 0.00, render_width = 120, render_height = 20):
+    def __init__(self, environment, render_width=120, render_height=20):
         super().__init__(environment)
-        self._render_delay = render_delay
-        self._physics_delay = physics_delay
         self._render_width = render_width
         self._render_height = render_height
         self._render_left = 0
         self._render_top = 0
+        self._last_render_time = -1
 
     def render(self):
         shapes_to_render = []
@@ -55,7 +55,9 @@ class AsciiRenderer(Renderer):
             shapes_to_render.append(copy.deepcopy(food.get_shape()))
             pixels.append(".")
         additional_1 = ["width(w): " + str(self._render_width), "height(h): " + str(self._render_height),
-                        "physics delay(p): " + str(self._physics_delay), "render delay(r): " + str(self._render_delay)]
+                        "ticks: " + str(self._environment._tick_count),
+                        "frames/s: "+str(1/(time.time()-self._last_render_time)),
+                        "physics/s: "+str(1/(time.time()-self._environment._last_tick_time))]
         side_info = []
         for creature in sorted(self._environment._living_creatures, key=lambda x: x.get_energy()):
             side_info.append(creature.get_name() + ": " + str(creature.get_energy()))
@@ -63,6 +65,7 @@ class AsciiRenderer(Renderer):
         t = threading.Thread(target=render_to_ascii, args=(shapes_to_render, pixels, [additional_1], side_info,
                                                   self._render_width, self._render_height, self._render_left,
                                                   self._render_top, self._environment._width, self._environment._height))
+        self._last_render_time = time.time()
         t.start()
         print("+")
 

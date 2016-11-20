@@ -2,6 +2,12 @@ import math
 
 
 class Shape:
+    def get_x(self):
+        pass
+
+    def get_y(self):
+        pass
+
     def get_pos(self):
         pass
 

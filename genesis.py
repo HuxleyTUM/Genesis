@@ -61,6 +61,7 @@ class Environment:
         self._time_collision_food = 0
         self._time_collision_creatures = 0
         self._time_thinking = 0
+        self._last_tick_time = -1
 
     def queue_creature(self, creature):
         self._queued_creatures.append(creature)
@@ -88,6 +89,7 @@ class Environment:
         self._tick_count += 1
         for listener in self._tick_listeners:
             listener(self)
+        self._last_tick_time = time.time()
 
     def move_creature(self, creature, distance_to_travel):
         tick = time.time()

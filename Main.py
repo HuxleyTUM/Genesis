@@ -5,6 +5,7 @@ import copy
 import render_management
 import rendering
 import operator
+import pygame
 
 start_mass = 200
 start_energy = 300
