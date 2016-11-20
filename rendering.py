@@ -3,6 +3,8 @@ import copy
 import operator
 import shapes
 import numpy as np
+import pygame
+import sys
 
 
 def listen_for_key(self):
@@ -30,6 +32,56 @@ class Renderer:
     def render(self):
         pass
 
+class PyGame(Renderer):
+    def __init__(self, environment, render_delay = 100, physics_delay = 0.00, render_width = 900, render_height = 600):
+        pygame.init()
+        self.screen = pygame.display.set_mode((render_width, render_height))
+        super().__init__(environment)
+        self._render_delay = render_delay
+        self._physics_delay = physics_delay
+        self._render_width = render_width
+        self._render_height = render_height
+        self._render_left = 0
+        self._render_top = 0
+
+    def render(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                sys.exit()
+
+        shapes_to_render = []
+        pixels = []
+        for creature in self._environment._living_creatures:
+            for organ in creature._organs:
+                if organ is not creature.get_body() and organ.get_shape() is not None:
+                    shapes_to_render.append(copy.deepcopy(organ.get_shape()))
+                    pixels.append((0,255,0))
+            shapes_to_render.append(copy.deepcopy(creature.get_body().get_shape()))
+            pixels.append((0,0,255))
+        for food in self._environment._food:
+            shapes_to_render.append(copy.deepcopy(food.get_shape()))
+            pixels.append((255,0,0))
+        additional_1 = ["width(w): " + str(self._render_width), "height(h): " + str(self._render_height),
+                        "physics delay(p): " + str(self._physics_delay),
+                        "render delay(r): " + str(self._render_delay)]
+        side_info = []
+        for creature in sorted(self._environment._living_creatures, key=lambda x: x.get_energy()):
+            side_info.append(creature.get_name() + ": " + str(creature.get_energy()))
+
+        t = threading.Thread(target=PyGameRender, args=(self.screen, shapes_to_render, pixels, [additional_1], side_info,
+                                                           self._render_width, self._render_height,
+                                                           self._render_left,
+                                                           self._render_top, self._environment._width,
+                                                           self._environment._height))
+        t.start()
+        print("+")
+
+def PyGameRender(screen, shapes_to_render, pixels, additionals, side_infos, output_width, output_height, x_init, y_init, width, height):
+    print("PyGameRenderer")
+    screen.fill((0,0,0))
+    for shape, colour in zip(shapes_to_render, pixels):
+        pygame.draw.circle(screen,colour+(0,),(int(shape.get_x()*10),int(shape.get_y()*10)),int(shape.get_radius()*10),0)
+    pygame.display.flip()
 
 class AsciiRenderer(Renderer):
     def __init__(self, environment, render_delay = 100, physics_delay = 0.00, render_width = 120, render_height = 20):

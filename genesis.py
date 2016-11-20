@@ -4,7 +4,6 @@ import copy
 import shapes
 import random
 import time
-from msvcrt import getch
 import numpy as np
 import operator
 

@@ -7,7 +7,7 @@ class Manager:
         self._running = False
         self._physics = physics
         self._render = render
-        self._render_delta = 1/1
+        self._render_delta = 1/30
         self._physics_delta = 1/10
         self._last_physics_call = -1
         self._last_render_call = -1

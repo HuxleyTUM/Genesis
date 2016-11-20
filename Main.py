@@ -11,8 +11,8 @@ start_energy = 300
 mutation_model = gen.MutationModel(0.1, 1)
 init_mutation_model = gen.MutationModel(1, 1)
 creature_radius = 5
-width = 300
-height = 50
+width = 90
+height = 60
 
 init_food_count = 50
 max_food_count = 100
@@ -88,7 +88,7 @@ def start(width, height):
 
     environment._tick_listeners.append(food_listener)
     environment._tick_listeners.append(create_number_listener)
-    renderer = rendering.AsciiRenderer(environment)
+    renderer = rendering.PyGame(environment)
     manager = render_management.Manager(environment.tick, renderer.render)
     manager.start()
 
