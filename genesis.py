@@ -8,7 +8,14 @@ import numpy as np
 import operator
 
 # G todo: add some reusable way of mutating parameters. maybe using the Beta function?
-max_age = 500
+max_age = 250
+
+def random_pos(width, height, borders=0):
+    return [random_from_interval(borders, width-borders), random_from_interval(borders, height-borders)]
+
+
+def random_from_interval(min, max):
+    return random.random()*(max-min)+min
 
 
 def binary_activation(input_value):
@@ -37,6 +44,7 @@ class Food:
         self._mass = mass
         self._shape = shape
         self.initial_mass = mass
+        self.set_mass(mass)
 
     def reduce_mass(self, amount):
         self.set_mass(self._mass-amount)
@@ -135,7 +143,7 @@ class Environment:
     #    return [dx, dy]  # G todo: return actual absolute position
 
     def consume_food(self, shape, max_mass):
-        if(max_mass > 0.01):
+        if(max_mass > 0.05):
             tick = time.time()
             eaten = 0
             food_eaten = set()
@@ -504,13 +512,25 @@ class Mouth(Organ):
         self.register_output_neuron(self._eat_neuron)
         self.register_input_neuron(self._has_eaten_neuron)
 
+    def mutate(self, mutation_level):
+        strength = mutation_level._mutation_strength/2
+        mut_prob = mutation_level._mutation_likelihood
+        if random.random() < mut_prob:
+            self._food_capacity *= random_from_interval(1-strength, 1+strength)
+        if random.random() < mut_prob:
+            self._body_distance *= random_from_interval(1-strength, 1+strength)
+        if random.random() < mut_prob:
+            self._mouth_radius *= random_from_interval(1-strength, 1+strength)
+            # G todo: change area by random factor, not radius!
+
     def clone(self):
         m = Mouth(self._body_distance, self._rotation, self._food_capacity, self._mouth_radius)
         m._amount_eaten = self._amount_eaten
         return m
 
     def tick_cost(self):
-        return self._body_distance/10  # todo: replace with realistic tick cost
+        return self._body_distance/60 + (self._mouth_radius)**2/20 + self._food_capacity/50
+        # G todo: replace with realistic tick cost -> use mouth area and not just radius!
 
     def get_pos(self):
         [dx, dy] = convert_to_delta_distance(self._body_distance, self._rotation+self._creature.get_body()._rotation)
@@ -619,7 +639,7 @@ class Legs(Organ):
         angle_to_turn = self._max_degree_turn * angle_factor
         self._creature.get_environment().turn_creature(self._creature, angle_to_turn)
         self._creature.get_environment().move_creature(self._creature, distance_to_travel)
-        mass_to_burn = distance_to_travel/100 + angle_to_turn/100  # G todo: replace with realistic formula
+        mass_to_burn = distance_to_travel/200 + angle_to_turn/200  # G todo: replace with realistic formula
         self._creature.add_mass(mass_to_burn)
 
     def get_forward_neuron(self):
@@ -648,9 +668,9 @@ class Fission(Organ):
 
     def execute(self):
         fission_value = self._fission_neuron.consume()
-        if fission_value > 0:  # G todo: reenable this
+        if fission_value > 0:
             initial_mass = self._creature.get_body().get_mass()
-            new_mass = initial_mass * 0.4
+            new_mass = initial_mass * 0.6
             self._creature.get_body().set_mass(new_mass)
 
             split_creature = self._creature.clone()
@@ -659,7 +679,7 @@ class Fission(Organ):
 
             split_creature.mutate(self._mutation_model)
             self._creature.get_environment().queue_creature(split_creature)
-            #print("creature "+self._creature._name+" split itself")
+            print("creature "+self._creature._name+" split itself")
 
     def tick_cost(self):
         return 0

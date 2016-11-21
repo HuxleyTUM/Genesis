@@ -88,7 +88,7 @@ def render_with_pygame(screen, shapes_to_render, pixels, additionals, side_infos
     for shape, colour in zip(reversed(shapes_to_render), reversed(pixels)):
         top_left = ((shape.get_x() - shape.get_radius()) * x_scaling,
                     (shape.get_y() - shape.get_radius()) * y_scaling)
-        dimensions = (int(shape.get_radius() * x_scaling * 2), int(shape.get_radius() * y_scaling)*2)
+        dimensions = (int(round(shape.get_radius() * x_scaling * 2)), int(round(shape.get_radius() * y_scaling)*2))
         rect = (top_left[0], top_left[1], dimensions[0], dimensions[1])
         pygame.draw.ellipse(screen, colour+(0,), rect, 0)
         # pygame.draw.circle()

@@ -8,7 +8,7 @@ import operator
 import pygame
 
 start_mass = 200
-mutation_model = gen.MutationModel(0.1, 1)
+mutation_model = gen.MutationModel(0.1, 0.3)
 init_mutation_model = gen.MutationModel(1, 1)
 creature_radius = 5
 width = 180
