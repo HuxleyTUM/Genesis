@@ -51,44 +51,46 @@ class PyGame(Renderer):
     def render(self):
         shapes_to_render = []
         pixels = []
-        for creature in self._environment._living_creatures:
-            for organ in creature._organs:
-                if organ is not creature.get_body() and organ.get_shape() is not None:
-                    shapes_to_render.append(copy.deepcopy(organ.get_shape()))
+        for creature in self._environment.living_creatures:
+            for organ in creature.organs:
+                shape = organ.shape
+                if organ is not creature.body and shape is not None:
+                    shapes_to_render.append(copy.deepcopy(shape))
                     pixels.append((0, 255, 0))
-            shapes_to_render.append(copy.deepcopy(creature.get_body().get_shape()))
+            shapes_to_render.append(copy.deepcopy(creature.body.shape))
             pixels.append((0, 0, 255 - 200*(creature.age / gen.MAX_AGE)))
-        for food in self._environment._food:
-            shapes_to_render.append(copy.deepcopy(food.get_shape()))
+        for food in self._environment.food_pellets:
+            shapes_to_render.append(copy.deepcopy(food.shape))
             pixels.append((255, 0, 0))
         additional = ["width(w): " + str(self._render_width), "height(h): " + str(self._render_height),
-                      "ticks: " + str(self._environment._tick_count),
+                      "ticks: " + str(self._environment.tick_count),
                       "frames/s: " + str(1 / (time.time() - self._last_render_time)),
                       "physics/s: " + str(1 / max(self._environment.last_tick_delta, 0.00001))
                       ]
         self._last_render_time = time.time()
         side_info = []
-        for creature in sorted(self._environment._living_creatures, key=lambda x: x.get_mass()):
-            side_info.append(creature.get_name() + ": " + str(creature.get_mass()))
+        for creature in sorted(self._environment.living_creatures, key=lambda x: x.mass):
+            side_info.append(creature.name + ": " + str(creature.mass))
 
         t = threading.Thread(target=render_with_pygame, args=(self.screen, shapes_to_render, pixels, additional, side_info,
-                                                           self._render_width, self._render_height,
-                                                           self._render_left,
-                                                           self._render_top, self._environment._width,
-                                                           self._environment._height))
+                                                              self._render_width, self._render_height,
+                                                              self._render_left,
+                                                              self._render_top, self._environment.width,
+                                                              self._environment.height))
         t.start()
 
 
-def render_with_pygame(screen, shapes_to_render, pixels, additionals, side_infos, output_width, output_height, x_init, y_init, width, height):
+def render_with_pygame(screen, shapes_to_render, pixels, additionals, side_infos, output_width, output_height,
+                       x_init, y_init, width, height):
     lock.acquire()
     x_scaling = output_width / width
     y_scaling = output_height / height
 
     screen.fill((0, 0, 0))
     for shape, colour in zip(reversed(shapes_to_render), reversed(pixels)):
-        top_left = ((shape.get_x() - shape.get_radius()) * x_scaling,
-                    (shape.get_y() - shape.get_radius()) * y_scaling)
-        dimensions = (int(round(shape.get_radius() * x_scaling * 2)), int(round(shape.get_radius() * y_scaling)*2))
+        top_left = ((shape.x - shape.radius) * x_scaling,
+                    (shape.y - shape.radius) * y_scaling)
+        dimensions = (int(round(shape.radius * x_scaling * 2)), int(round(shape.radius * y_scaling)*2))
         rect = (top_left[0], top_left[1], dimensions[0], dimensions[1])
         pygame.draw.ellipse(screen, colour+(0,), rect, 0)
         # pygame.draw.circle()
@@ -103,6 +105,7 @@ def render_with_pygame(screen, shapes_to_render, pixels, additionals, side_infos
     pygame.display.update()
     lock.release()
 
+
 class AsciiRenderer(Renderer):
     def __init__(self, environment, render_width=120, render_height=20):
         super().__init__(environment)
@@ -115,27 +118,28 @@ class AsciiRenderer(Renderer):
     def render(self):
         shapes_to_render = []
         pixels = []
-        for creature in self._environment._living_creatures:
-            for organ in creature._organs:
-                if organ is not creature.get_body() and organ.get_shape() is not None:
-                    shapes_to_render.append(copy.deepcopy(organ.get_shape()))
+        for creature in self._environment.living_creatures:
+            for organ in creature.organs:
+                if organ is not creature.body and organ.shape is not None:
+                    shapes_to_render.append(copy.deepcopy(organ.shape))
                     pixels.append("X")
-            shapes_to_render.append(copy.deepcopy(creature.get_body().get_shape()))
-            pixels.append(creature._name[len(creature._name) - 1])
-        for food in self._environment._food:
-            shapes_to_render.append(copy.deepcopy(food.get_shape()))
+            shapes_to_render.append(copy.deepcopy(creature.body.shape))
+            pixels.append(creature.name[len(creature.name) - 1])
+        for food in self._environment.food_pellets:
+            shapes_to_render.append(copy.deepcopy(food.shape))
             pixels.append(".")
         additional_1 = ["width(w): " + str(self._render_width), "height(h): " + str(self._render_height),
-                        "ticks: " + str(self._environment._tick_count),
+                        "ticks: " + str(self._environment.tick_count),
                         "frames/s: "+str(1/(time.time()-self._last_render_time)),
                         "physics/s: "+str(1/self._environment.last_tick_delta)]
         side_info = []
-        for creature in sorted(self._environment._living_creatures, key=lambda x: x.get_energy()):
-            side_info.append(creature.get_name() + ": " + str(creature.get_energy()))
+        for creature in sorted(self._environment.living_creatures, key=lambda x: x.get_energy()):
+            side_info.append(creature.name + ": " + str(creature.get_energy()))
 
         t = threading.Thread(target=render_to_ascii, args=(shapes_to_render, pixels, [additional_1], side_info,
-                                                  self._render_width, self._render_height, self._render_left,
-                                                  self._render_top, self._environment._width, self._environment._height))
+                                                           self._render_width, self._render_height,
+                                                           self._render_left, self._render_top,
+                                                           self._environment.width, self._environment.height))
         self._last_render_time = time.time()
         t.start()
         print("+")

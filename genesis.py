@@ -8,6 +8,7 @@ import numpy as np
 import operator
 
 # G todo: add some reusable way of mutating parameters. maybe using the Beta function?
+MIN_FOOD_MASS_TO_CONSUME = 0.05
 FOOD_GROWTH_RATE = 0.4
 MAX_AGE = 250
 MAX_FOOD_MASS = 100
@@ -16,8 +17,9 @@ def random_pos(width, height, borders=0):
     return [random_from_interval(borders, width-borders), random_from_interval(borders, height-borders)]
 
 
-def random_from_interval(min, max):
-    return random.random()*(max-min)+min
+def random_from_interval(min_value, max_value):
+    """Returns a number which lies between min and max."""
+    return random.random()*(max_value - min_value) + min_value
 
 
 def binary_activation(input_value):
@@ -33,268 +35,440 @@ def sigmoid_activation(input_value):
 
 
 def convert_to_delta_distance(distance, angle):
+    """Takes a distance and a direction and computes the resulting 2D vector."""
     rad = math.radians(angle)
     return [math.sin(rad)*distance, math.cos(rad)*distance]
 
 
 def clip(number, min_value, max_value):
+    """Clips a number to be no smaller than min_value and bigger than max_value. min_value must be smaller than
+    max_value, otherwise the behaviour is undefined"""
     return min(max(number, min_value), max_value)
 
 
 class Food:
+    """This class represents a piece of Food. It can be placed in the Environment and consumed by Creatures."""
     def __init__(self, mass, shape):
-        self._mass = mass
-        self._shape = shape
-        self.initial_mass = mass
-        self.set_mass(mass)
-        self.environment = None
+        self.__shape = shape
+        self.__mass = mass
+        self.__environment = None
 
-    def reduce_mass(self, amount):
-        self.set_mass(self._mass-amount)
+    @property
+    def mass(self):
+        """Returns the Foods mass."""
+        return self.__mass
 
-    def set_mass(self, amount):
-        self._mass = amount
-        self._shape._radius = math.sqrt(self._mass/2)
-        if self._mass < 0.05:
+    @mass.setter
+    def mass(self, amount):
+        """Sets the mass of this piece of Food."""
+        self.__mass = amount
+        self.__shape.radius = math.sqrt(self.__mass / 2)
+        if self.__mass < 0.05:
             self.kill()
 
+    @property
+    def environment(self):
+        return self.__environment
+
+    @environment.setter
+    def environment(self, environment):
+        self.__environment = environment
+        if self not in environment.food_pellets:
+            environment.add_food(self)
+
     def kill(self):
-        self.environment.remove_food(self)
+        """Destroys this piece of Food, removing it from its Environment."""
+        if self.__environment is not None:
+            self.__environment.remove_food(self)
 
-    def get_shape(self):
-        return self._shape
-
-    def get_mass(self):
-        return self._mass
+    @property
+    def shape(self):
+        """Returns the physical representation of this piece of Food."""
+        return self.__shape
 
     def tick(self):
-        self.set_mass(min(MAX_FOOD_MASS, self._mass + FOOD_GROWTH_RATE))
+        """This method should be called, each time a virtual time unit (tick) has passed."""
+        self.mass = min(MAX_FOOD_MASS, self.__mass + FOOD_GROWTH_RATE)
 
 
 class Environment:
+    """This class represents the environment in which Creatures live. Not only does it manage the creatures living in
+    it but also the Food which is meant to be consumed by the Creatures. The environment has no real sense of time. It
+    has to be controlled from the outside via its Environment.tick() method. Whenever this method is called, the world
+    "continues". Although the environment has no real sense of time, it has a variable tick_count, which counts up one
+    each call to Environment.tick() and represents its internal time keeping.
+
+    Creatures can not simply be added to the environment at any time. They need to be queued with
+    Environment.queue_creature(creature) which will then be added on the next call to Environment.tick().
+
+    Creatures in the world can not decide for themselves how they can move around. They need to make call the method
+    move_creature(creature, distance_to_travel)."""
     def __init__(self, width=1000, height=1000):
-        self._tick_count = 0
-        self._creatures = []
-        self._living_creatures = []
-        self._food = set()
-        self._width = width
-        self._height = height
-        self._running = True
-        self._queued_creatures = []
-        self._tick_listeners = []
-        self._time_collision_food = 0
-        self._time_collision_creatures = 0
-        self._time_thinking = 0
-        self.last_tick_time = -1
-        self.last_tick_delta = -1
+        self.__tick_count = 0
+        self.__creatures = []
+        self.__living_creatures = []
+        self.__food_pellets = set()
+        self.__width = width
+        self.__height = height
+        self.__queued_creatures = []
+        self.__tick_listeners = []
+        self.time_consumption_food = 0
+        self.time_collision_creatures = 0
+        self.time_collision_food = 0
+        self.time_thinking = 0
+        self.time_ticking = 0
+        self.time_creature_sensing = 0
+        self.time_creature_ticking = 0
+        self.time_creature_executing = 0
+        self.time_fission_executing = 0
+        self.times = [0]*10
+        self.organ_times = {}
+        self.organ_clone_time = {}
+        self.time_mouth_executing = 0
+        self.__last_tick_time = -1
+        self.__last_tick_delta = -1
+
+    @property
+    def last_tick_time(self):
+        return self.__last_tick_time
+
+    @property
+    def last_tick_delta(self):
+        return self.__last_tick_delta
+
+    @property
+    def tick_count(self):
+        return self.__tick_count
+
+    def add_tick_listener(self, tick_listener):
+        self.__tick_listeners.append(tick_listener)
+
+    @property
+    def creatures(self):
+        return self.__creatures
+
+    @property
+    def living_creatures(self):
+        return self.__living_creatures
+
+    @property
+    def food_pellets(self):
+        return self.__food_pellets
+
+    @property
+    def width(self):
+        return self.__width
+
+    @property
+    def height(self):
+        return self.__height
+
+    @property
+    def queued_creatures(self):
+        return self.__queued_creatures
 
     def queue_creature(self, creature):
-        self._queued_creatures.append(creature)
+        """Queues a creature to be placed in the Environment as soon as Environment.tick() is called"""
+        self.__queued_creatures.append(creature)
 
-    def kill_create(self, creature):
-        if creature._existing:
-            self._living_creatures.remove(creature)
+    def remove_creature(self, creature):
+        """Call this method to remove a creature from this Environment. The Creature will no longer receive tick()
+        function calls."""
+        if creature.exists:
+            self.__living_creatures.remove(creature)
         else:
-            self._queued_creatures.remove(creature)
-        creature._alive = False
+            self.__queued_creatures.remove(creature)
+        if creature.environment is not None:
+            creature.environment = None
 
     def tick(self):
-        for food in self._food:
+        """As an environment has no real sense of time, this method must be called periodically from the outside."""
+        tick_time = time.time()
+        for food in self.__food_pellets:
             food.tick()
-        for creature in self._queued_creatures:
-            if creature._alive:
-                self._living_creatures.append(creature)
-                self._creatures.append(creature)
-                creature.set_environment(self)
-        self._queued_creatures.clear()
-        for creature in self._living_creatures[:]:
+        for creature in self.__queued_creatures:
+            if creature.alive:
+                self.__living_creatures.append(creature)
+                self.__creatures.append(creature)
+                creature.environment = self
+        self.__queued_creatures.clear()
+        tick_time_0 = time.time()
+        for creature in self.__living_creatures[:]:
             creature.sense()
-        for creature in self._living_creatures[:]:
-            creature.tick(self._tick_count)
-        for creature in self._living_creatures[:]:
+        self.time_creature_sensing += time.time() - tick_time_0
+        tick_time_1 = time.time()
+        for creature in self.__living_creatures[:]:
+            creature.tick(self.__tick_count)
+        self.time_creature_ticking += time.time() - tick_time_1
+        tick_time_2 = time.time()
+        for creature in self.__living_creatures[:]:
             creature.execute()
-        self._tick_count += 1
-        for listener in self._tick_listeners:
+        self.time_creature_executing += time.time() - tick_time_2
+        self.__tick_count += 1
+        for listener in self.__tick_listeners:
             listener(self)
         current_time = time.time()
-        self.last_tick_delta = current_time - self.last_tick_time
-        self.last_tick_time = current_time
+        self.__last_tick_delta = current_time - self.__last_tick_time
+        self.__last_tick_time = current_time
+        self.time_ticking += (time.time()-tick_time)
 
     def move_creature(self, creature, distance_to_travel):
+        """Creatures can not move freely in the Environment as they please. To move a Creature, one must call this
+        method and after the Environment has done the necessary collision detection it decides on how far the creature
+        actually moved. This distance is then returned."""
         tick = time.time()
-        [x, y] = [creature.get_x(), creature.get_y()]
-        rotation = creature.get_body().get_rotation()
-        [delta_x, delta_y] = convert_to_delta_distance(distance_to_travel, rotation)  # G todo: calculate new position using x, y, distance_to_travel & rotation
+        [x, y] = [creature.x, creature.y]
+        rotation = creature.body.rotation
+        [delta_x, delta_y] = convert_to_delta_distance(distance_to_travel, rotation)
+        # G todo: calculate new position using x, y, distance_to_travel & rotation
         [new_x, new_y] = [x + delta_x, y + delta_y]
-        translated_shape = copy.deepcopy(creature.get_body().get_shape())
-        translated_shape.set_pos(new_x, new_y)
+        translated_shape = copy.deepcopy(creature.body.shape)
+        translated_shape.pos = [new_x, new_y]
         # G todo: the following only computes if the the new position is valid.
         # G todo- it doesn't calculate how far the object should actually move instead!
         is_valid = True
-        [width, height] = creature.get_body().get_shape().get_dimensions()
-        if new_x+width/2 > self._width or new_x-width/2 < 0 or new_y+height/2 > self._height or new_y-height/2 < 0:
+        [width, height] = creature.body.shape.dimensions
+        if new_x+width/2 > self.__width or new_x-width/2 < 0 or new_y+height/2 > self.__height or new_y-height/2 < 0:
             is_valid = False
         # if is_valid:
         #     for other_creature in self._living_creatures:
-        #         if other_creature is not creature and translated_shape.collides(other_creature.get_body().get_shape()):
+        #        if other_creature is not creature and translated_shape.collides(other_creature.body.get_shape()):
         #             is_valid = False
         #             #print("collision detected between "+other_creature._name+ " and "+creature._name)
         #             break
         if is_valid:
-            creature.get_body().set_position(new_x, new_y)
-        self._time_collision_creatures += (time.time()-tick)
+            creature.body.pos = [new_x, new_y]
+        self.time_collision_creatures += (time.time()-tick)
         return distance_to_travel if is_valid else 0
 
     def turn_creature(self, creature, angle_to_turn):
-        creature.get_body().set_rotation(creature.get_body().get_rotation()+angle_to_turn)
-
-    #def to_absolute_position(self, creature, dx, dy):
-    #    return [dx, dy]  # G todo: return actual absolute position
-
-    def consume_food(self, shape, max_mass):
-        if(max_mass > 0.05):
-            tick = time.time()
-            eaten = 0
-            remaining_capacity = max_mass
-            for food in copy.copy(self._food):
-                if shape.collides(food.get_shape()):
-                    if remaining_capacity < food.get_mass():
-                        food.reduce_mass(remaining_capacity)
-                        eaten += remaining_capacity
-                        break
-                    else:
-                        eaten += food.get_mass()
-                        food.set_mass(0)
-            #self._food.difference_update(food_eaten)  # = [filter(lambda f: f not in food_eaten, self._food)]
-            self._time_collision_food += (time.time()-tick)
-            return eaten
+        """Creatures can not turn freely, as this might result in a collision. To turn a Creature, one must call this
+        method and after the Environment has done the necessary collision detection it decides on how far the creature
+        actually turned. The angle is then returned."""
+        if type(creature.body.shape) is shapes.Circle:
+            creature.body.rotation = creature.body.rotation + angle_to_turn
+            return angle_to_turn
         else:
-            return 0
+            raise Exception("Turning creatures is not implemented for shape " + str(type(creature.body.shape)))
 
-    def create_food(self, x, y, mass, radius):
-        self.add_food(Food(mass, shapes.Circle(x, y, radius)))
+    def find_colliding_food(self, shape, break_if):
+        food_found = []
+        #remaining_capacity = max_mass
+        for food in copy.copy(self.__food_pellets):
+            if shape.collides(food.shape):
+                food_found.append(food)
+                if break_if(food_found):
+                    break
+        return food_found
+        # self._food.difference_update(food_eaten)  # = [filter(lambda f: f not in food_eaten, self._food)]
+
+    def sum_mass(self, food_pellets):
+        summed = 0
+        for food in food_pellets:
+            summed += food.mass
+        return summed
+
+    def create_food(self, x, y, mass):
+        """Creates Food of circular shape at the specified destination with the given mass."""
+        self.add_food(Food(mass, shapes.Circle(x, y, 0)))
 
     def add_food(self, food):
-        self._food.add(food)
+        """Add the specified Food to the Environment for further consumption by Creatures populating it."""
+        self.__food_pellets.add(food)
         food.environment = self
 
     def remove_food(self, food):
-        self._food.remove(food)
+        """Removes the specified piece of Food from the Environment."""
+        self.__food_pellets.remove(food)
+
 
 class Creature:
+    """This class represents a Creature which can populate an Environment. It consists of several Organs, of which two
+    Organs with a special purpose are the Body (which must always be present) and the Brain (Which is used for
+    controlling a creatures behaviour). Each Creature has an age which counts the number of calls to Creature.tick().
+    If a Creatures age is greater than genesis.MAX_AGE or it's mass is lower than get_mass_threshold() it dies.
+
+    A Creatures position and orientation are stored in and managed by the body, which is accessible via get_body().
+
+    A Creatures brain is accessible via get_brain()."""
     def __init__(self, body, name=None):
-        self._organs = []
-        self._body = body
-        body.mass_listeners.append(self._register_mass)
-        self._brain = None
-        self._environment = None
+        self.__organs = []
+        self.__body = body
+        body.mass_listeners.append(self.__register_mass)
+        self.__brain = None
+        self.__environment = None
         self.add_organ(body)
-        self._alive = True
-        self._existing = False
-        self._name = name
+        self.__alive = True
+        self.name = name
         self._last_tick_count = -1
         self.age = 0
         self.organ_tick_cost = 0
 
+    @property
+    def exists(self):
+        return self.__environment is not None
+
+    @property
+    def alive(self):
+        return self.__alive
+
     def __str__(self):
-        return self._name if self._name is not None else "creature"
+        return self.name if self.name is not None else "creature"
 
     def __repr__(self):
         return self.__str__()
 
-    def _register_mass(self, amount):
-        if amount < self.organ_tick_cost*20:
+    @property
+    def brain(self):
+        return self.__brain
+
+    @brain.setter
+    def brain(self, brain):
+        if self.__brain is not None:
+            self.remove_organ(self.__brain)
+        self.add_organ(brain)
+
+    def __register_mass(self, amount):
+        if amount < self.mass_threshold:
             self.kill()
 
+    @property
+    def tick_cost(self):
+        organ_tick_cost = 0
+        for organ in self.__organs:
+            organ_tick_cost += organ.tick_cost
+        return organ_tick_cost
+
+    @property
+    def mass_threshold(self):
+        return self.tick_cost * 20
+
     def add_organ(self, organ, mutation_model=None):
-        if self._brain is not None:
-            self._brain.wire_organ(organ, mutation_model)
-        if type(organ) is Brain:
-            self._brain = organ
-            for old_organ in self._organs:
-                if old_organ is not self._brain:
-                    self._brain.wire_organ(old_organ)
-        self._organs.append(organ)
-        organ._creature = self
+        if organ not in self.__organs:
+            if self.__brain is not None:
+                self.__brain.wire_organ(organ, mutation_model)
+            if type(organ) is Brain:
+                self.__brain = organ
+                for old_organ in self.__organs:
+                    if old_organ is not self.__brain:
+                        self.__brain.wire_organ(old_organ)
+            self.__organs.append(organ)
+            if organ.creature is None:
+                organ.creature = self
 
     def remove_organ(self, organ):
-        if self._brain is not None:
-            self._brain.unwire_organ(organ)
+        if self.__brain is not None:
+            self.__brain.unwire_organ(organ)
         if type(organ) is Brain:
-            for wired_organ in self._organs:
-                if wired_organ is not self._brain:
-                    self._brain.unwire_organ(wired_organ)
-        self._organs.remove(organ)
+            for wired_organ in self.__organs:
+                if wired_organ is not self.__brain:
+                    self.__brain.unwire_organ(wired_organ)
+        self.__organs.remove(organ)
         organ._creature = None
 
     def sense(self):
-        for organ in self._organs:
+        for organ in self.__organs:
             organ.sense()
 
     def execute(self):
-        for organ in self._organs:
-            if not self._alive:
-                break
+        environment = self.environment
+        for organ in self.__organs:
+            t = time.time()
+            organ.prepare_execute()
+            if type(organ) not in environment.organ_times:
+                environment.organ_times[type(organ)] = 0
+                environment.organ_times[type(organ)] += time.time() - t
+        for organ in self.__organs:
+            t = time.time()
             organ.execute()
+            environment.organ_times[type(organ)] += time.time() - t
+            if not self.__alive:
+                    break
 
     def tick(self, tick_count):
-        self.age += 1
         if self.age > MAX_AGE:
             self.kill()
-        self._last_tick_count = tick_count
-        #print("Creature.tick()\tCreature.name()="+self._name)
-        #print("\tCreature._organs = "+str(self._organs))
-        #print("\tCreature._body.get_mass() = "+str(self._body.get_mass()))
-        #print("\tCreature._body.get_pos() = ["+str(self.get_x())+", "+str(self.get_y())+"]")
-        #print("\tCreature._body.get_rotation() = "+str(self._body.get_rotation()))
-        if self._brain is not None:
-            tick = time.time()
-            self._brain.think()
-            self._environment._time_thinking += (time.time() - tick)
-        self.organ_tick_cost = 0
-        for organ in self._organs:
-            self.organ_tick_cost += organ.tick_cost()
-        self.add_mass(-self.organ_tick_cost)
+        if self.__alive:
+            self._last_tick_count = tick_count
+            if self.__brain is not None:
+                tick = time.time()
+                self.__brain.think_in_thread()
+                self.__environment.time_thinking += (time.time() - tick)
+            organ_tick_cost = self.tick_cost
+            self.mass -= organ_tick_cost
+            self.age += 1
 
-    def get_environment(self):
-        return self._environment
+    @property
+    def environment(self):
+        return self.__environment
 
-    def get_body(self):
-        return self._body
+    @environment.setter
+    def environment(self, environment):
+        if environment is not None and self not in environment.living_creatures:
+            raise Exception("Can't set environment in Creature as long as it hasn't doesn't exist in that environment."
+                            "Please call Environment.queue_creature(creature) and wait for the following"
+                            "Environment.tick().")
+        self.__environment = environment
 
-    def get_mass(self):
-        return self._body.get_mass()
+    @property
+    def mass(self):
+        return self.__body.mass
 
-    def set_mass(self, amount):
-        self._body.set_mass(amount)
+    @mass.setter
+    def mass(self, amount):
+        self.__body.mass = amount
 
     def add_mass(self, amount):
-        self._body.add_mass(amount)
+        self.__body.mass += amount
 
-    def get_x(self):
-        return self.get_body().get_x()
+    @property
+    def body(self):
+        return self.__body
 
-    def get_y(self):
-        return self.get_body().get_y()
+    @body.setter
+    def body(self, body):
+        # G todo: implement
+        raise Exception("Changing a Creatures body is not implemented.")
 
-    def set_environment(self, environment):
-        self._environment = environment
-        self._existing = environment is not None
+    @property
+    def x(self):
+        return self.__body.x
 
-    def get_organs(self):
-        return self._organs
+    @property
+    def y(self):
+        return self.__body.y
 
-    def set_pos(self, x, y):
-        self._body.get_shape().set_pos(x, y)
+    @property
+    def organs(self):
+        return self.__organs
+
+    @property
+    def pos(self):
+        return self.__body.pos
+
+    @pos.setter
+    def pos(self, pos):
+        self.__body.shape.pos = pos
 
     def clone(self):
-        cloned_creature = Creature(self._body.clone(), self._name)
-        for organ in self._organs:
-            if organ is not self._body:
+        environment = self.environment
+        t = time.time()
+        cloned_creature = Creature(self.__body.clone(), self.name)
+        if Body not in environment.organ_clone_time:
+            environment.organ_clone_time[Body] = 0
+        environment.organ_clone_time[Body] += (time.time() - t)
+        for organ in self.__organs:
+            if organ is not self.__body:
+                t = time.time()
                 cloned_creature.add_organ(organ.clone())
-        cloned_creature.set_mass(self.get_mass())
+                # if environment is not None:
+                if type(organ) not in environment.organ_clone_time:
+                    environment.organ_clone_time[type(organ)] = 0
+                environment.organ_clone_time[type(organ)] += (time.time() - t)
+
+        cloned_creature.mass = self.mass
         cloned_creature.age = self.age
-        cloned_creature._brain.rewire(self._brain)
+        cloned_creature.__brain.rewire(self.__brain)
         # G todo: remove variable _existing
         return cloned_creature
 
@@ -304,73 +478,105 @@ class Creature:
             self.add_organ(new_organ, mutation_model)
             new_organ.mutate(mutation_model)
         if random.random() < mutation_model.mutation_likelihood:
-            random_organ = self._organs[random.randrange(0, len(self._organs))]
-            if random_organ is not self._brain and random_organ is not self._body:
+            random_organ = self.__organs[random.randrange(0, len(self.__organs))]
+            if random_organ is not self.__brain and random_organ is not self.__body:
                 self.remove_organ(random_organ)
-        for organ in self._organs:
+        for organ in self.__organs:
             organ.mutate(mutation_model)
 
     def kill(self):
-        if self._alive:
-            self._environment.kill_create(self)
-            self._alive = False
-
-    def get_name(self):
-        return self._name
+        if self.__alive:
+            if self.__environment is not None:
+                self.__environment.remove_creature(self)
+            self.__alive = False
+            for organ in self.__organs:
+                organ.kill()
 
 
 class Organ:
+    """This class represents an organ which can be used by creatures. It can be added to creatures which will then
+    wire the organ to their brain to be used in the future.
+
+    Organs can acquire information about their environment
+    which are then fed into the Brain or get commands from the brain in the form of an arbitrary number of floating
+    values which are then to be interpreted by the Brain.
+
+    Use the methods Organ.register_input_neuron(Neuron) to add Neurons which acquire information and
+    Organ.register_output_neuron(Neuron) to add Neurons which get commands from the brain."""
     def __init__(self, label=None):
-        self._input_neurons = []
-        self._output_neurons = []
-        self._creature = None
-        self._label = label
+        self.__input_neurons = []
+        self.__output_neurons = []
+        self.__creature = None
+        self.label = label
 
     def __str__(self):
-        return self._label if self._label is not None else "organ"
+        return self.label if self.label is not None else "organ"
 
     def __repr__(self):
         return self.__str__()
 
-    def __deepcopy__(self, memodict={}):
-        return self.clone()
+    @property
+    def input_neurons(self):
+        return self.__input_neurons
+
+    @property
+    def output_neurons(self):
+        return self.__output_neurons
+
+    @property
+    def creature(self):
+        return self.__creature
+
+    @creature.setter
+    def creature(self, creature):
+        self.__creature = creature
+        if self not in creature.organs:
+            creature.add_organ(self)
 
     def register_input_neuron(self, neuron):
-        self._input_neurons.append(neuron)
+        self.__input_neurons.append(neuron)
 
     def register_output_neuron(self, neuron):
-        self._output_neurons.append(neuron)
-
-    def get_input_neurons(self):
-        return self._input_neurons
-
-    def get_output_neurons(self):
-        return self._output_neurons
-
-    def has_label(self):
-        return self._label is not None
-
-    def get_label(self):
-        return self._label
+        self.__output_neurons.append(neuron)
 
     def sense(self):
+        """This method will give the organ time to acquire all necessary information which is needed to fill its
+        input neuron which were present in Organ.input_neurons at the time it was wired to the brain."""
+        pass
+
+    def prepare_execute(self):
         pass
 
     def execute(self):
+        """This method should be used to consume all relevant values from the output neurons which were present in
+         Organ.output_neurons at the time it was wired to the brain."""
         pass
 
-    def mutate(self, mutation_level):
+    def mutate(self, mutation_model):
+        """Mutates this organ with the specified mutation_model."""
         pass
 
+    def kill(self):
+        """Kills this organ. Releases any running threads and closes any open streams"""
+        pass
+
+    @property
     def tick_cost(self):
+        """This method specifies how much mass this organ costs to maintain each tick."""
         return 0
 
-    def get_shape(self):
-        pass
+    @property
+    def shape(self):
+        """Returns the shape of this organ if it has any physical representation and None otherwise."""
+        return None
+
+    @shape.setter
+    def shape(self, shape):
+        raise Exception("Organ " + str(type(self)) + " can't have a shape!")
 
     def clone(self):
-        print("invalid call in "+str(type(self)))
-        a = 1/0
+        """Clones the organ and returns it. The cloned organ is not attached to any creature."""
+        raise Exception("Clone not implemented for organ of type "+str(type(self)))
 
 
 class Neuron:
@@ -432,22 +638,47 @@ class Brain(Organ):
     def __init__(self):
         super().__init__("brain")
 
-        self._input_layer = []
-        self.hidden_layer = []
-        self._output_layer = []
-        self._layers = [self._input_layer, self.hidden_layer, self._output_layer]
+        self.__input_layer = []
+        self.__hidden_layer = []
+        self.__output_layer = []
+        self.__layers = [self.__input_layer, self.__hidden_layer, self.__output_layer]
 
-        self._bias_input_layer = Neuron(identity_activation, "input bias")
-        self.bias_hidden_layer = Neuron(identity_activation, "hidden bias")
+        self.__bias_input_layer = Neuron(identity_activation, "input bias")
+        self.__bias_hidden_layer = Neuron(identity_activation, "hidden bias")
 
-        self.add_input_neuron(self._bias_input_layer)
-        self.add_hidden_neuron(self.bias_hidden_layer)
-        self.t = threading.Thread(target=self.think_for_thread)
-        self.lock_0 = threading.Lock()
-        self.lock_1 = threading.Lock()
+        self.add_input_neuron(self.__bias_input_layer)
+        self.add_hidden_neuron(self.__bias_hidden_layer)
+        self.__thinking_thread = threading.Thread(target=self.__think_for_thread)
+        # self.__lock_0 = threading.Lock()
+        # self.__lock_1 = threading.Lock()
         # print("acquire lock 0")
-        self.lock_0.acquire()
-        self.t.start()
+        # self.__lock_0.acquire()
+        # self.__thinking_thread.start()
+        self.__is_thinking = False
+
+    @property
+    def layers(self):
+        return self.__layers
+
+    @property
+    def input_layer(self):
+        return self.__input_layer
+
+    @property
+    def hidden_layer(self):
+        return self.__hidden_layer
+
+    @property
+    def output_layer(self):
+        return self.__output_layer
+
+    @property
+    def bias_input_layer(self):
+        return self.__bias_input_layer
+
+    @property
+    def bias_hidden_layer(self):
+        return self.__bias_hidden_layer
 
     def clone(self):
         # cloned_brain = Brain()
@@ -461,43 +692,43 @@ class Brain(Organ):
         return Brain()
 
     def rewire(self, other_brain):
-        for layer_index in range(len(self._layers)-1):
-            from_layer_this = self._layers[layer_index]
-            from_layer_other = other_brain._layers[layer_index]
-            to_layer_this = self._layers[layer_index+1]
-            to_layer_other = other_brain._layers[layer_index+1]
-            for from_neuron_this, from_neuron_other  in zip(from_layer_this, from_layer_other):
-                for to_neuron_this, to_neuron_other  in zip(to_layer_this, to_layer_other):
+        for layer_index in range(len(self.__layers)-1):
+            from_layer_this = self.__layers[layer_index]
+            from_layer_other = other_brain.layers[layer_index]
+            to_layer_this = self.__layers[layer_index + 1]
+            to_layer_other = other_brain.layers[layer_index+1]
+            for from_neuron_this, from_neuron_other in zip(from_layer_this, from_layer_other):
+                for to_neuron_this, to_neuron_other in zip(to_layer_this, to_layer_other):
                     weight = from_neuron_other.get_weight(to_neuron_other)
                     from_neuron_this.connect_to_neuron(to_neuron_this, weight)
 
     def add_input_neuron(self, neuron, mutation_model=None):
-        self._input_layer.append(neuron)
-        neuron.connect_to_layer(self.hidden_layer, mutation_model=mutation_model)
-        self.fill_hidden_layer(len(self._input_layer))
+        self.__input_layer.append(neuron)
+        neuron.connect_to_layer(self.__hidden_layer, mutation_model=mutation_model)
+        self.fill_hidden_layer(len(self.__input_layer))
 
     def add_output_neuron(self, neuron, mutation_model=None):
-        self._output_layer.append(neuron)
-        Brain._connect_layer_to_neuron(self.hidden_layer, neuron, mutation_model=mutation_model)
-        self.fill_hidden_layer(len(self._output_layer))
+        self.__output_layer.append(neuron)
+        Brain._connect_layer_to_neuron(self.__hidden_layer, neuron, mutation_model=mutation_model)
+        self.fill_hidden_layer(len(self.__output_layer))
 
     def remove_input_neuron(self, input_neuron):
-        self._input_layer.remove(input_neuron)
+        self.__input_layer.remove(input_neuron)
 
     def remove_output_neuron(self, output_neuron):
-        for hidden_neuron in self.hidden_layer:
+        for hidden_neuron in self.__hidden_layer:
             hidden_neuron.disconnect_from_neuron(output_neuron)
-        self._output_layer.remove(output_neuron)
+        self.__output_layer.remove(output_neuron)
 
     def add_hidden_neuron(self, neuron=None):
         if neuron is None:
-            neuron = Neuron(sigmoid_activation, "hidden " + str(len(self.hidden_layer)))
-        self.hidden_layer.append(neuron)
-        Brain._connect_layer_to_neuron(self._input_layer, neuron)
-        neuron.connect_to_layer(self._output_layer)
+            neuron = Neuron(sigmoid_activation, "hidden " + str(len(self.__hidden_layer)))
+        self.__hidden_layer.append(neuron)
+        Brain._connect_layer_to_neuron(self.__input_layer, neuron)
+        neuron.connect_to_layer(self.__output_layer)
 
     def fill_hidden_layer(self, count):
-        for i in range(len(self.hidden_layer), count):
+        for i in range(len(self.__hidden_layer), count):
             self.add_hidden_neuron()
 
     @staticmethod
@@ -505,47 +736,65 @@ class Brain(Organ):
         for neuron_from in layer:
             neuron_from.connect_to_neuron(neuron, weight, mutation_model)
 
+    @property
     def tick_cost(self):
-        return len(self.hidden_layer) / 100  # G todo: replace with realistic tick cost
+        return len(self.__hidden_layer) / 100  # G todo: replace with realistic tick cost
+
+    def think_in_thread(self):
+        """Computes the values for the output neurons with the given inputs in the input neurons.
+
+        This operation is non blocking"""
+        # self.__lock_1.acquire()
+        # self.__lock_0.release()
+        self.think()
 
     def think(self):
-        # print("releasing lock..")
-        self.lock_1.acquire()
-        self.lock_0.release()
+        self.__is_thinking = True
+        self.__bias_input_layer.receive_fire(1.)
+        for input_neuron in self.__input_layer:
+            input_neuron.fire()
+        self.__bias_hidden_layer.receive_fire(1.)
+        for hidden_neuron in self.__hidden_layer:
+            hidden_neuron.fire()
+        self.__is_thinking = False
 
-    def think_for_thread(self):
+    def __think_for_thread(self):
         # tick = time.time()
-        while True:
-            # print("acquire lock 1")
-            self.lock_0.acquire()
-            self._bias_input_layer.receive_fire(1.)
-            for input_neuron in self._input_layer:
-                input_neuron.fire()
-            self.bias_hidden_layer.receive_fire(1.)
-            for hidden_neuron in self.hidden_layer:
-                hidden_neuron.fire()
-            self.lock_1.release()
-                # for output_neuron in self._output_layer:
-                #    output_neuron.fire()
+        self.__lock_0.acquire()
+        while self.creature.alive:
+            self.think()
+            self.__lock_1.release()
+            self.__lock_0.acquire()
+
+    @property
+    def is_thinking(self):
+        return self.__is_thinking
 
     def wire_organ(self, organ, mutation_model=None):
-        for input_neuron in organ.get_input_neurons():
+        """Wires an organ to this brain. All the organs input and output neurons are connected to the brains neural
+        network. If a mutation model is given it is used to initialize the weights of the newly formed connections."""
+        for input_neuron in organ.input_neurons:
             self.add_input_neuron(input_neuron, mutation_model)
-        for output_neuron in organ.get_output_neurons():
+        for output_neuron in organ.output_neurons:
             self.add_output_neuron(output_neuron, mutation_model)
 
     def unwire_organ(self, organ):
-        for input_neuron in organ.get_input_neurons():
+        """Undoes what wire_organ did. Removes all the organs input and output neurons from the brain along with all
+        of its connections to other neurons in the neural network."""
+        for input_neuron in organ.input_neurons:
             self.remove_input_neuron(input_neuron)
-        for output_neuron in organ.get_output_neurons():
+        for output_neuron in organ.output_neurons:
             self.remove_output_neuron(output_neuron)
 
-    def mutate(self, mutation_level):
-        likelihood = mutation_level.mutation_likelihood
-        strength = mutation_level.mutation_strength * 2
-        for layer_index in range(len(self._layers)-1):
-            from_layer = self._layers[layer_index]
-            to_layer = self._layers[layer_index+1]
+    def mutate(self, mutation_model):
+        """Mutates the brain and its neural weights. The mutation is determined by the given mutation_model. If a
+        mutation of a weight occurs it will simply add a random delta (size depending on mutation_model) with an 80%
+        chance. In the other 20% it will flip the sign of the weight."""
+        likelihood = mutation_model.mutation_likelihood
+        strength = mutation_model.mutation_strength * 2
+        for layer_index in range(len(self.__layers)-1):
+            from_layer = self.__layers[layer_index]
+            to_layer = self.__layers[layer_index + 1]
             for neuron_from in from_layer:
                 for neuron_to in to_layer:
                     weight = neuron_from.get_weight(neuron_to)
@@ -553,143 +802,242 @@ class Brain(Organ):
                         if random.random() < 0.2:
                             weight *= -1
                         else:
-                            weight += random.random()*strength-strength/2
+                            weight += random_from_interval(-strength, strength)
                     neuron_from.connect_to_neuron(neuron_to, weight)
 
+    def kill(self):
+        """Unlocks all locks in this organ so that the thinking thread can terminate."""
+        # if self.__lock_0.locked():
+        #     self.__lock_0.release()
+        # if self.__lock_1.locked():
+        #     self.__lock_1.release()
 
 
 class Mouth(Organ):
     def __init__(self, body_distance, rotation, capacity=10., mouth_radius=2):
         super().__init__("mouth")
-        self._body_distance = body_distance
-        self._rotation = rotation
+        self.body_distance = body_distance
+        self.rotation = rotation
         self._amount_eaten = 0
-        self._food_capacity = capacity
-        self._mouth_radius = mouth_radius
-        #self._max_consumption = max_consumption
-        self.eat_neuron = OutputNeuron("mouth: eat")
-        self._has_eaten_neuron = InputNeuron("mouth: has eaten")
-        self.register_output_neuron(self.eat_neuron)
-        self.register_input_neuron(self._has_eaten_neuron)
+        self.food_capacity = capacity
+        self.mouth_radius = mouth_radius
+        # self._max_consumption = max_consumption
+        self.__eat_neuron = OutputNeuron("mouth: eat")
+        self.__has_eaten_neuron = InputNeuron("mouth: has eaten")
+        self.register_output_neuron(self.__eat_neuron)
+        self.register_input_neuron(self.__has_eaten_neuron)
+        self.__colliding_food = None
+        self.__colliding_food_lock_0 = threading.Lock()
+        self.__colliding_food_lock_0.acquire()
+        self.__colliding_food_lock_1 = threading.Lock()
+        # threading.Thread(target=self.find_colliding_food).start()
+        self.__max_mass = 0
+
+    @property
+    def eat_neuron(self):
+        return self.__eat_neuron
+
+    @property
+    def has_eaten_neuron(self):
+        return self.__has_eaten_neuron
 
     def mutate(self, mutation_model):
+        """Mutates a creatures mouth. This will mutate the parameters rotation, food_capacity, body_distance and
+        mouth_radius."""
         strength = mutation_model.mutation_strength / 2
         mut_prob = mutation_model.mutation_likelihood
         if random.random() < mut_prob:
             r = random.random()
             if r < 0.3:
-                self._rotation += random_from_interval(-90, 90)
+                self.rotation += random_from_interval(-90, 90)
             elif r < 0.5:
-                self._rotation *= -1
+                self.rotation *= -1
             else:
-                self._rotation *= random_from_interval(1-strength, 1+strength)
+                self.rotation *= random_from_interval(1 - strength, 1 + strength)
         if random.random() < mut_prob:
-            self._food_capacity *= random_from_interval(1-strength, 1+strength)
+            self.food_capacity *= random_from_interval(1 - strength, 1 + strength)
         if random.random() < mut_prob:
             r = random.random()
             if r < 0.3:
-                self._body_distance = max(0, self._body_distance+random_from_interval(-3, +3))
+                self.body_distance = max(0, self.body_distance + random_from_interval(-3, +3))
             else:
-                self._body_distance *= random_from_interval(1 - strength, 1 + strength)
+                self.body_distance *= random_from_interval(1 - strength, 1 + strength)
         if random.random() < mut_prob:
-            self._mouth_radius *= random_from_interval(1-strength, 1+strength)
+            self.mouth_radius *= random_from_interval(1 - strength, 1 + strength)
             # G todo: change area by random factor, not radius!
 
     def clone(self):
-        m = Mouth(self._body_distance, self._rotation, self._food_capacity, self._mouth_radius)
+        # t = time.time()
+        m = Mouth(self.body_distance, self.rotation, self.food_capacity, self.mouth_radius)
+        # self.creature.environment.times[0] += (time.time()-t)
         m._amount_eaten = self._amount_eaten
         return m
 
+    @property
     def tick_cost(self):
-        return self._body_distance/60 + (self._mouth_radius)**2/20 + self._food_capacity/50
+        return self.body_distance / 60 + self.mouth_radius ** 2 / 20 + self.food_capacity / 50
         # G todo: replace with realistic tick cost -> use mouth area and not just radius!
 
-    def get_pos(self):
-        [dx, dy] = convert_to_delta_distance(self._body_distance, self._rotation+self._creature.get_body()._rotation)
-        return [self._creature.get_x() + dx, self._creature.get_y() + dy]
+    @property
+    def pos(self):
+        [dx, dy] = convert_to_delta_distance(self.body_distance, self.rotation + self.creature.body.rotation)
+        return [self.creature.x + dx, self.creature.y + dy]
 
-    def get_shape(self):
-        pos = self.get_pos()
-        return shapes.Circle(pos[0], pos[1], self._mouth_radius)
+    @property
+    def shape(self):
+        pos = self.pos
+        return shapes.Circle(pos[0], pos[1], self.mouth_radius)
+
+    def prepare_execute(self):
+        pass
+        # t = time.time()
+        # eat_factor = clip(self.__eat_neuron.consume(), 0, 1)
+        # self.__max_mass = eat_factor * self.food_capacity
+        # if self.__max_mass > MIN_FOOD_MASS_TO_CONSUME:
+        #     self.__colliding_food_lock_1.acquire()
+        #     self.__colliding_food_lock_0.release()
+        # else:
+        #     self._amount_eaten = 0
+        # self.creature.environment.time_collision_food += (time.time() - t)
 
     def execute(self):
-        environment = self._creature.get_environment()
-        eat_factor = clip(self.eat_neuron.consume(), 0, 1)
-        max_mass = eat_factor * self._food_capacity
-        self._amount_eaten = environment.consume_food(self.get_shape(), max_mass)
-        self._creature.get_body().add_mass(self._amount_eaten)
+        t = time.time()
+        if self.__colliding_food is not None:
+            # self.__colliding_food_lock_1.acquire()
+            self.__colliding_food = self.find_colliding_food()
+            self.consume_food(self.__max_mass, self.__colliding_food)
+            # self.__colliding_food_lock_1.release()
+            self.__colliding_food = None
+        self.creature.environment.time_collision_food += (time.time() - t)
+
+    def consume_food(self, max_mass, foods):
+        tick = time.time()
+        eaten = 0
+        remaining_capacity = max_mass
+        for food in foods:
+            if remaining_capacity < food.mass:
+                food.mass -= remaining_capacity
+                eaten += remaining_capacity
+                break
+            else:
+                eaten += food.mass
+                food.mass = 0
+        # self._food.difference_update(food_eaten)  # = [filter(lambda f: f not in food_eaten, self._food)]
+        self.creature.mass += eaten
+        self.creature.environment.time_consumption_food += (time.time() - tick)
+
+    def find_colliding_food_for_thread(self):
+        self.__colliding_food_lock_0.acquire()
+        while True:
+            self.__colliding_food = self.find_colliding_food()
+            self.__colliding_food_lock_1.release()
+            self.__colliding_food_lock_0.acquire()
+
+    def find_colliding_food(self):
+        """Tries to consume Food which intersects with shape up the given maximum mass max_mass. The consumed mass
+        is returned by this function and all Food that has been consumed will be removed from the Environment."""
+
+        # r = random.randint(0, 1000)
+        # print("start finding food ("+str(r)+")")
+        environment = self.creature.environment
+        if environment is not None:
+            def f(foods): return environment.sum_mass(foods) > self.food_capacity
+            return environment.find_colliding_food(self.shape, f)
+        return None
+        # print("finished finding food (" + str(r) + ")")
 
 
 class Body(Organ):
     def __init__(self, mass, shape, angle=0, max_mass_burn=20):
         super().__init__("body")
 
-        self._mass = 0
         self._initial_mass = mass
-        self._shape = shape
+        self.__shape = shape
         self._max_mass_burn = max_mass_burn
 
-        self._rotation = angle
+        self.rotation = angle
         # G todo: add collision neuron
-        self.mass_neuron = InputNeuron("body: mass")
-        self.register_input_neuron(self.mass_neuron)
-        self.age_neuron = InputNeuron("body: age")
-        self.register_input_neuron(self.age_neuron)
+        self.__mass_neuron = InputNeuron("body: mass")
+        self.register_input_neuron(self.__mass_neuron)
+        self.__age_neuron = InputNeuron("body: age")
+        self.register_input_neuron(self.__age_neuron)
 
         self.mass_listeners = []
-        self.set_mass(mass)
+        self.__mass = mass
+
+    @property
+    def shape(self):
+        return self.__shape
+
+    @shape.setter
+    def shape(self, shape):
+        self.__shape = shape
 
     def clone(self):
-        b = Body(self._mass, copy.deepcopy(self._shape), self._rotation, self._max_mass_burn)
+        b = Body(self.__mass, copy.deepcopy(self.shape), self.rotation, self._max_mass_burn)
         b._initial_mass = self._initial_mass
         return b
 
-    def get_mass(self):
-        return self._mass
+    @property
+    def mass_neuron(self):
+        return self.__mass_neuron
 
-    def set_mass(self, amount):
+    @property
+    def age_neuron(self):
+        return self.__age_neuron
+
+    @property
+    def mass(self):
+        return self.__mass
+
+    @mass.setter
+    def mass(self, amount):
         amount = max(0, amount)
-        self._mass = amount
-        self._shape.set_radius(math.sqrt(amount/2))
+        self.__mass = amount
+        self.shape.radius = math.sqrt(amount / 2)
         for mass_listener in self.mass_listeners:
-            mass_listener(self._mass)
+            mass_listener(self.__mass)
 
-        # G todo: change shape size to reflect mass change
+            # G todo: change shape size to reflect mass change
 
-    def add_mass(self, amount):
-        self.set_mass(self._mass + amount)
+    @property
+    def pos(self):
+        return self.shape.pos
 
-    def set_rotation(self, angle):
-        self._rotation = angle
-
-    def get_rotation(self):
-        return self._rotation
-
-    def set_position(self, x, y):
-        self._shape._x = x
-        self._shape._y = y
+    @pos.setter
+    def pos(self, pos):
+        self.shape.pos = pos
 
     def move(self, dx, dy):
-        self._shape.translate(dx, dy)
+        self.shape.translate(dx, dy)
 
-    def get_x(self):
-        return self._shape.get_x()
+    @property
+    def x(self):
+        return self.shape.x
 
-    def get_y(self):
-        return self._shape.get_y()
+    @x.setter
+    def x(self, x):
+        self.shape.x = x
+
+    @property
+    def y(self):
+        return self.shape.y
+
+    @y.setter
+    def y(self, y):
+        self.shape.y = y
 
     def sense(self):
-        self.age_neuron.receive_fire(self._creature.age / MAX_AGE)
-        self.mass_neuron.receive_fire(self._mass / self._initial_mass)
+        creature_age = self.creature.age
+        self.__age_neuron.receive_fire(creature_age / MAX_AGE)
+        self.__mass_neuron.receive_fire(self.__mass / self._initial_mass)
 
     def execute(self):
         pass
 
+    @property
     def tick_cost(self):
-        return self._mass/100  # G todo: replace with realistic tick cost -> a bigger body should cost more mass
-
-    def get_shape(self):
-        return self._shape
+        return self.__mass / 100  # G todo: replace with realistic tick cost -> a bigger body should cost more mass
 
 
 class Legs(Organ):
@@ -700,36 +1048,43 @@ class Legs(Organ):
         super().__init__("legs")
         self.max_distance = max_distance
         self.max_degree_turn = max_degree_turn
-        self.distance_moved = 0
-        self.distance_moved_neuron = InputNeuron("Legs: distance moved")
-        self.forward_neuron = OutputNeuron("Legs: forward")
-        self.turn_clockwise_neuron = OutputNeuron("Legs: turn")
-        self.register_input_neuron(self.distance_moved_neuron)
-        self.register_output_neuron(self.forward_neuron)
-        self.register_output_neuron(self.turn_clockwise_neuron)
+        self.__distance_moved = 0
+        self.__distance_moved_neuron = InputNeuron("Legs: distance moved")
+        self.__forward_neuron = OutputNeuron("Legs: forward")
+        self.__turn_clockwise_neuron = OutputNeuron("Legs: turn")
+        self.register_input_neuron(self.__distance_moved_neuron)
+        self.register_output_neuron(self.__forward_neuron)
+        self.register_output_neuron(self.__turn_clockwise_neuron)
+
+    @property
+    def distance_moved_neuron(self):
+        return self.__distance_moved_neuron
+
+    @property
+    def forward_neuron(self):
+        return self.__forward_neuron
+
+    @property
+    def turn_clockwise_neuron(self):
+        return self.__turn_clockwise_neuron
 
     def clone(self):
         return Legs(self.max_distance, self.max_degree_turn)
 
     def execute(self):
-        travel_factor = clip(self.forward_neuron.consume(), 0, 1)
+        travel_factor = clip(self.__forward_neuron.consume(), 0, 1)
         distance_to_travel = travel_factor * self.max_distance
-        angle_factor = clip(self.turn_clockwise_neuron.consume(), -1, 1)
+        angle_factor = clip(self.__turn_clockwise_neuron.consume(), -1, 1)
         angle_to_turn = self.max_degree_turn * angle_factor
-        self._creature.get_environment().turn_creature(self._creature, angle_to_turn)
-        self.distance_moved = self._creature.get_environment().move_creature(self._creature, distance_to_travel)
+        self.creature.environment.turn_creature(self.creature, angle_to_turn)
+        self.__distance_moved = self.creature.environment.move_creature(self.creature, distance_to_travel)
         mass_to_burn = distance_to_travel/200 + angle_to_turn/200  # G todo: replace with realistic formula
-        self._creature.add_mass(-mass_to_burn)
-
-    def get_forward_neuron(self):
-        return self.forward_neuron
-
-    def get_turn_clockwise_neuron(self):
-        return self.turn_clockwise_neuron
+        self.creature.mass -= mass_to_burn
 
     def sense(self):
-        self.distance_moved_neuron.receive_fire(self.distance_moved / self.max_distance)
+        self.__distance_moved_neuron.receive_fire(self.__distance_moved / self.max_distance)
 
+    @property
     def tick_cost(self):
         return 0  # G todo: replace with realistic tick cost.
 
@@ -741,30 +1096,41 @@ class Fission(Organ):
     # G transferred to the "offsprings"..
     def __init__(self, mutation_model):
         super().__init__("fission")
-        self._mutation_model = mutation_model
-        self.fission_neuron = OutputNeuron("Fission: fission")
-        self.register_output_neuron(self.fission_neuron)
+        self.mutation_model = mutation_model
+        self.__fission_neuron = OutputNeuron("Fission: fission")
+        self.register_output_neuron(self.__fission_neuron)
 
     def clone(self):
-        return Fission(copy.deepcopy(self._mutation_model))
+        return Fission(copy.deepcopy(self.mutation_model))
 
     def execute(self):
-        fission_value = self.fission_neuron.consume()
+        fission_value = self.__fission_neuron.consume()
         if fission_value > 0:
-            initial_mass = self._creature.get_body().get_mass()
+            creature = self.creature
+            environment = creature.environment
+            initial_mass = creature.body.mass
             new_mass = initial_mass * 0.6
-            self._creature.get_body().set_mass(new_mass)
+            creature.body.mass = new_mass
+            if creature.alive:
+                t = time.time()
 
-            split_creature = self._creature.clone()
-            split_creature.age = 0
-            split_creature.get_body().set_rotation(random.random()*360)
+                split_creature = creature.clone()
+                environment.time_fission_executing += (time.time() - t)
+                split_creature.age = 0
+                split_creature.body.rotation = random.random()*360
 
-            split_creature._name = self._creature._name + "+"
+                split_creature.__name = creature.name + "+"
 
-            split_creature.mutate(self._mutation_model)
-            self._creature.get_environment().queue_creature(split_creature)
-            # print("creature "+self._creature._name+" split itself")
+                split_creature.mutate(self.mutation_model)
+                if split_creature.alive:
+                    environment.queue_creature(split_creature)
+                # print("creature "+self._creature._name+" split itself")
 
+    @property
+    def fission_neuron(self):
+        return self.__fission_neuron
+
+    @property
     def tick_cost(self):
         return 0
         # todo: replace with realistic tick cost

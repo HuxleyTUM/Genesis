@@ -21,37 +21,42 @@ max_food_count = int(100 * factor ** 2)
 init_food_mass = 5
 
 init_creature_count = 5
-min_creature_count = int(5 * factor ** 2)
-
-
-def random_pos(width, height, borders=0):
-    return [random_from_interval(borders, width-borders), random_from_interval(borders, height-borders)]
-
-
-def random_from_interval(min, max):
-    return r.random()*(max-min)+min
+min_creature_count = 6#int(5 * factor ** 2)
 
 
 def create_number_listener(environment):
-    if len(environment._living_creatures) < min_creature_count:
+    if len(environment.living_creatures) < min_creature_count:
         place_random_creature(environment)
 
 
 def food_listener(environment):
-    for i in range(len(environment._food), max_food_count):
+    if environment.tick_count % 50 == 0:
+        print("total time ticking: "+str(environment.time_ticking))
+        print("time thinking: "+str(environment.time_thinking))
+        print("time food consumption: "+str(environment.time_consumption_food))
+        print("time food collision: "+str(environment.time_collision_food))
+        print("time creature sensing: "+str(environment.time_creature_sensing))
+        print("time creature ticking: "+str(environment.time_creature_ticking))
+        print("time creature executing: "+str(environment.time_creature_executing))
+        print("time creature collision: "+str(environment.time_collision_creatures))
+        print("time fission: "+str(environment.time_fission_executing))
+        print("times: "+str(environment.times))
+        print("organ times: "+str(environment.organ_times))
+        print("organ clone times: "+str(environment.organ_clone_time))
+    for i in range(len(environment.food_pellets), max_food_count):
         place_random_food(environment)
 
 
 def place_random_food(environment):
-    r_pos = random_pos(width, height)
-    environment.create_food(r_pos[0], r_pos[1], init_food_mass, 0)
+    r_pos = gen.random_pos(width, height)
+    environment.create_food(r_pos[0], r_pos[1], init_food_mass)
 
 
 def place_random_creature(environment):
     if False:
         environment.queue_creature(create_master_creature())
     else:
-        r_pos = random_pos(width, height, creature_radius)
+        r_pos = gen.random_pos(width, height, creature_radius)
         name = str(r.randint(0, 1000000))
         name = "0" * (4 - len(name)) + name
         print("Creating " + name + " at " + str(r_pos))
@@ -67,11 +72,11 @@ def place_random_creature(environment):
         creature.add_organ(mouth)
         creature.add_organ(fission)
 
-        for organ in creature.get_organs():
+        for organ in creature.organs:
             organ.mutate(init_mutation_model)
 
-        r_pos = random_pos(width, height, creature_radius)
-        creature.set_pos(r_pos[0], r_pos[1])
+        r_pos = gen.random_pos(width, height, creature_radius)
+        creature.pos = [r_pos[0], r_pos[1]]
         environment.queue_creature(creature)
 
 
@@ -97,13 +102,12 @@ def create_master_creature():
     brain.bias_hidden_layer.connect_to_neuron(legs.turn_clockwise_neuron, 0.5)
     brain.bias_hidden_layer.connect_to_neuron(mouth.eat_neuron, 1)
 
-    r_pos = random_pos(width, height, creature_radius)
-    creature.set_pos(r_pos[0], r_pos[1])
+    r_pos = gen.random_pos(width, height, creature_radius)
+    creature.pos(r_pos[0], r_pos[1])
     return creature
 
 
 def start(width, height):
-    #print("running simulation with " + str(len(creatures)) + " creatures")
     environment = gen.Environment(width, height)
     # environment.queue_creature(create_master_creature())
     for i in range(init_food_count):
@@ -111,8 +115,8 @@ def start(width, height):
     for i in range(min_creature_count):
         place_random_creature(environment)
 
-    environment._tick_listeners.append(food_listener)
-    environment._tick_listeners.append(create_number_listener)
+    environment.add_tick_listener(food_listener)
+    environment.add_tick_listener(create_number_listener)
     renderer = rendering.PyGame(environment)
     manager = render_management.Manager(environment.tick, renderer.render)
     manager.start()
