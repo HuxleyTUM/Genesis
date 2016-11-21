@@ -11,6 +11,9 @@ class Shape:
     def get_pos(self):
         pass
 
+    def translate(self, dx, dy):
+        self.set_pos(self.get_x() + dx, self.get_y() + dy)
+
     def set_pos(self, x, y):
         pass
     

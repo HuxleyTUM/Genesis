@@ -8,20 +8,19 @@ import operator
 import pygame
 
 start_mass = 200
-start_energy = 100
 mutation_model = gen.MutationModel(0.1, 1)
 init_mutation_model = gen.MutationModel(1, 1)
 creature_radius = 5
-width = 90
-height = 60
+width = 180
+height = 120
 
 init_food_count = 50
 max_food_count = 100
-food_mass_min = 20
-food_mass_max = 50
+food_mass_min = 50
+food_mass_max = 100
 
 init_creature_count = 5
-min_creature_count = 5
+min_creature_count = 10
 
 
 def random_pos(width, height, borders=0):
@@ -58,7 +57,7 @@ def place_random_creature(environment):
     name = str(r.randint(0, 10000))
     name = "0" * (4 - len(name)) + name
     print("Creating " + name + " at " + str(r_pos))
-    body = gen.Body(start_energy, start_mass, shapes.Circle(r_pos[0], r_pos[1], creature_radius))
+    body = gen.Body(start_mass, shapes.Circle(r_pos[0], r_pos[1], creature_radius))
     brain = gen.Brain()
     legs = gen.Legs()
     mouth = gen.Mouth(3, 0)

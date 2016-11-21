@@ -67,8 +67,8 @@ class PyGame(Renderer):
                       ]
         self._last_render_time = time.time()
         side_info = []
-        for creature in sorted(self._environment._living_creatures, key=lambda x: x.get_energy()):
-            side_info.append(creature.get_name() + ": " + str(creature.get_energy()))
+        for creature in sorted(self._environment._living_creatures, key=lambda x: x.get_mass()):
+            side_info.append(creature.get_name() + ": " + str(creature.get_mass()))
 
         t = threading.Thread(target=render_with_pygame, args=(self.screen, shapes_to_render, pixels, additional, side_info,
                                                            self._render_width, self._render_height,

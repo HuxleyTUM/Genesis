@@ -157,10 +157,11 @@ class Creature:
         self._brain = None
         self._environment = None
         self.add_organ(body)
-        self._alive = body.get_energy() > 0
+        self._alive = True
         self._existing = False
         self._name = name
         self._last_tick_count = -1
+        self.age = 0
 
     def __str__(self):
         return self._name if self._name is not None else "creature"
@@ -186,16 +187,18 @@ class Creature:
 
     def execute(self):
         for organ in self._organs:
-            if self._body.get_energy() < 0:
+            if not self._alive:
                 break
             organ.execute()
 
     def tick(self, tick_count):
+        self.age += 1
+        if self.age > 500:
+            self.kill()
         self._last_tick_count = tick_count
         #print("Creature.tick()\tCreature.name()="+self._name)
         #print("\tCreature._organs = "+str(self._organs))
         #print("\tCreature._body.get_mass() = "+str(self._body.get_mass()))
-        #print("\tCreature._body.get_energy() = "+str(self._body.get_energy()))
         #print("\tCreature._body.get_pos() = ["+str(self.get_x())+", "+str(self.get_y())+"]")
         #print("\tCreature._body.get_rotation() = "+str(self._body.get_rotation()))
         if self._brain is not None:
@@ -205,7 +208,7 @@ class Creature:
         tick_cost_summed = 0
         for organ in self._organs:
             tick_cost_summed += organ.tick_cost()
-        self.decrease_energy(tick_cost_summed)
+        self.add_mass(-tick_cost_summed)
 
     def get_environment(self):
         return self._environment
@@ -216,8 +219,8 @@ class Creature:
     def get_mass(self):
         return self._body.get_mass()
 
-    def get_energy(self):
-        return self._body.get_energy()
+    def add_mass(self, amount):
+        self._body.add_mass(amount)
 
     def get_x(self):
         return self.get_body().get_x()
@@ -228,12 +231,6 @@ class Creature:
     def set_environment(self, environment):
         self._environment = environment
         self._existing = environment is not None
-
-    def decrease_energy(self, amount):
-        self._body.set_energy(self._body.get_energy()-amount)
-
-    def set_energy(self, amount):
-        self._body.set_energy(amount)
 
     def get_organs(self):
         return self._organs
@@ -254,7 +251,7 @@ class Creature:
     def kill(self):
         if self._alive:
             self._environment.kill_create(self)
-            #print(self._name + " died at time="+str(self._environment._tick_count))
+            self._alive = False
 
     def get_name(self):
         return self._name
@@ -398,7 +395,7 @@ class Brain(Organ):
             neuron_from.connect_to_neuron(neuron)
 
     def tick_cost(self):
-        return len(self._hidden_layer) / 10  # G todo: replace with realistic tick cost
+        return len(self._hidden_layer) / 100  # G todo: replace with realistic tick cost
 
     def think(self):
         #tick = time.time()
@@ -449,7 +446,7 @@ class Mouth(Organ):
         self.register_input_neuron(self._has_eaten_neuron)
 
     def tick_cost(self):
-        return self._body_distance  # todo: replace with realistic tick cost
+        return self._body_distance/10  # todo: replace with realistic tick cost
 
     def get_pos(self):
         [dx, dy] = convert_to_delta_distance(self._body_distance, self._rotation+self._creature.get_body()._rotation)
@@ -468,57 +465,36 @@ class Mouth(Organ):
 
 
 class Body(Organ):
-    def __init__(self, energy, mass, shape, angle=0, max_mass_burn=20):
+    def __init__(self, mass, shape, angle=0, max_mass_burn=20):
         super().__init__("body")
-
-        self._energy = 0
-        self._initial_energy = energy
-        self.set_energy(energy)
 
         self._mass = 0
         self._initial_mass = mass
+        self._shape = shape
         self.set_mass(mass)
         self._max_mass_burn = max_mass_burn
 
         self._total_mass_gained = 0
 
         self._rotation = angle
-        self._shape = shape
+        self._shape.set_radius(mass/20)
         # G todo: add collision neuron
         self._mass_neuron = InputNeuron("body: mass")
-        self._energy_neuron = InputNeuron("body: energy")
-        self._burn_mass_neuron = OutputNeuron("body: burn mass")
 
         self.register_input_neuron(self._mass_neuron)
-        self.register_input_neuron(self._energy_neuron)
-        self.register_output_neuron(self._burn_mass_neuron)
 
     def get_mass(self):
         return self._mass
 
     def set_mass(self, amount):
         self._mass = amount
-        self._total_mass_gained = 0
+        self._shape.set_radius(amount/20)
+        if self._mass <= 0:
+            self._creature.kill()
         # G todo: change shape size to reflect mass change
 
     def add_mass(self, amount):
-        self._mass += amount
-        self._total_mass_gained += amount
-
-    def get_energy(self):
-        return self._energy
-
-    def set_energy(self, new_energy):
-        self._energy = new_energy
-        if self._energy < 0:
-            self._creature.kill()
-
-    def burn_mass(self, mass_to_burn):
-        mass_to_burn = min(mass_to_burn, self._mass)
-        energy_gained = mass_to_burn*5
-        # G todo: formula for burning mass here. should be less effective if there is already a lot of energy
-        self._energy += energy_gained
-        self._mass -= mass_to_burn
+        self.set_mass(self._mass + amount)
 
     def set_rotation(self, angle):
         self._rotation = angle
@@ -531,8 +507,7 @@ class Body(Organ):
         self._shape._y = y
 
     def move(self, dx, dy):
-        self._shape._x += dx
-        self._shape._y += dy
+        self._shape.translate(dx, dy)
 
     def get_x(self):
         return self._shape.get_x()
@@ -542,15 +517,12 @@ class Body(Organ):
 
     def sense(self):
         self._mass_neuron.receive_fire(self._mass/self._initial_mass)
-        self._energy_neuron.receive_fire(self._energy/self._initial_energy)
 
     def execute(self):
-        mass_burn_factor = clip(self._burn_mass_neuron.consume(), 0, 1)
-        amount_to_burn = mass_burn_factor * self._max_mass_burn
-        self.burn_mass(amount_to_burn)
+        pass
 
     def tick_cost(self):
-        return self._mass/100  # G todo: replace with realistic tick cost -> a bigger body should cost more energy
+        return self._mass/100  # G todo: replace with realistic tick cost -> a bigger body should cost more mass
 
     def get_shape(self):
         return self._shape
@@ -576,8 +548,8 @@ class Legs(Organ):
         angle_to_turn = self._max_degree_turn * angle_factor
         self._creature.get_environment().turn_creature(self._creature, angle_to_turn)
         self._creature.get_environment().move_creature(self._creature, distance_to_travel)
-        energy_to_use = distance_to_travel/50 + angle_to_turn/50  # G todo: replace with realistic formula
-        self._creature.decrease_energy(energy_to_use)
+        mass_to_burn = distance_to_travel/100 + angle_to_turn/100  # G todo: replace with realistic formula
+        self._creature.add_mass(mass_to_burn)
 
     def get_forward_neuron(self):
         return self._forward_neuron
@@ -592,7 +564,7 @@ class Legs(Organ):
 class Fission(Organ):
     # G maybe there could be more than one offspring? this could be a parameter which results in this organ being more
     # G expensive. if more than one offspring possible, this class needs to be renamed.
-    # G also another parameter could be how much energy remains with the original creature and how much is
+    # G also another parameter could be how much mass remains with the original creature and how much is
     # G transferred to the "offsprings"..
     def __init__(self, mutation_model):
         super().__init__("fission")
@@ -603,11 +575,8 @@ class Fission(Organ):
     def execute(self):
         fission_value = self._fission_neuron.consume()
         if fission_value > 0:  # G todo: reenable this
-            initial_energy = self._creature.get_body().get_energy()
-            new_energy = initial_energy * 0.4
             initial_mass = self._creature.get_body().get_mass()
             new_mass = initial_mass * 0.4
-            self._creature.get_body().set_energy(new_energy)
             self._creature.get_body().set_mass(new_mass)
 
             split_creature = self._creature.clone()
