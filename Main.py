@@ -15,9 +15,9 @@ width = 180
 height = 120
 
 init_food_count = 50
-max_food_count = 100
-food_mass_min = 50
-food_mass_max = 100
+max_food_count = 50
+food_mass_min = 80
+food_mass_max = 130
 
 init_creature_count = 5
 min_creature_count = 10

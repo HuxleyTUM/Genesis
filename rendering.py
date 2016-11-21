@@ -7,6 +7,7 @@ import time
 import pygame
 import sys
 from pygame.locals import *
+import genesis as gen
 
 lock = threading.Lock()
 
@@ -56,14 +57,14 @@ class PyGame(Renderer):
                     shapes_to_render.append(copy.deepcopy(organ.get_shape()))
                     pixels.append((0, 255, 0))
             shapes_to_render.append(copy.deepcopy(creature.get_body().get_shape()))
-            pixels.append((0, 0, 255))
+            pixels.append((0, 0, 255 - 200*(creature.age/gen.max_age)))
         for food in self._environment._food:
             shapes_to_render.append(copy.deepcopy(food.get_shape()))
             pixels.append((255, 0, 0))
         additional = ["width(w): " + str(self._render_width), "height(h): " + str(self._render_height),
                       "ticks: " + str(self._environment._tick_count),
                       "frames/s: " + str(1 / (time.time() - self._last_render_time)),
-                      "physics/s: " + str(1 / self._environment.last_tick_delta)
+                      "physics/s: " + str(1 / max(self._environment.last_tick_delta, 0.00001))
                       ]
         self._last_render_time = time.time()
         side_info = []
@@ -92,10 +93,10 @@ def render_with_pygame(screen, shapes_to_render, pixels, additionals, side_infos
         pygame.draw.ellipse(screen, colour+(0,), rect, 0)
         # pygame.draw.circle()
     # i = 0
-    # for additional in additionals:
+    # for additional in additionals[3:4]:
     #     font = pygame.font.Font(None, 36)
     #     text = font.render(additional, 0, (255, 255, 255))
-    #     textpos = text.get_rect()
+    #     #textpos = text.get_rect()
     #     # textpos. = ().centerx
     #     screen.blit(text, (0, 36/2+26*i))
     #     i += 1

@@ -8,6 +8,7 @@ import numpy as np
 import operator
 
 # G todo: add some reusable way of mutating parameters. maybe using the Beta function?
+max_age = 500
 
 
 def binary_activation(input_value):
@@ -125,7 +126,7 @@ class Environment:
     #    return [dx, dy]  # G todo: return actual absolute position
 
     def consume_food(self, shape, max_mass):
-        if(max_mass > 0.001):
+        if(max_mass > 0.01):
             tick = time.time()
             eaten = 0
             food_eaten = set()
@@ -135,6 +136,8 @@ class Environment:
                     if remaining_capacity < food.get_mass():
                         food.reduce_mass(remaining_capacity)
                         eaten += remaining_capacity
+                        if food._shape.get_radius() < 0.2:
+                            food_eaten.add(food)
                         break
                     else:
                         eaten += food.get_mass()
@@ -154,6 +157,7 @@ class Creature:
     def __init__(self, body, name=None):
         self._organs = []
         self._body = body
+        body.mass_listeners.append(self._register_mass)
         self._brain = None
         self._environment = None
         self.add_organ(body)
@@ -162,12 +166,17 @@ class Creature:
         self._name = name
         self._last_tick_count = -1
         self.age = 0
+        self.organ_tick_cost = 0
 
     def __str__(self):
         return self._name if self._name is not None else "creature"
 
     def __repr__(self):
         return self.__str__()
+
+    def _register_mass(self, amount):
+        if amount < self.organ_tick_cost*20:
+            self.kill()
 
     def add_organ(self, organ):
         if self._brain is not None:
@@ -193,7 +202,7 @@ class Creature:
 
     def tick(self, tick_count):
         self.age += 1
-        if self.age > 500:
+        if self.age > max_age:
             self.kill()
         self._last_tick_count = tick_count
         #print("Creature.tick()\tCreature.name()="+self._name)
@@ -205,10 +214,10 @@ class Creature:
             tick = time.time()
             self._brain.think()
             self._environment._time_thinking += (time.time() - tick)
-        tick_cost_summed = 0
+        self.organ_tick_cost = 0
         for organ in self._organs:
-            tick_cost_summed += organ.tick_cost()
-        self.add_mass(-tick_cost_summed)
+            self.organ_tick_cost += organ.tick_cost()
+        self.add_mass(-self.organ_tick_cost)
 
     def get_environment(self):
         return self._environment
@@ -218,6 +227,9 @@ class Creature:
 
     def get_mass(self):
         return self._body.get_mass()
+
+    def set_mass(self, amount):
+        self._body.set_mass(amount)
 
     def add_mass(self, amount):
         self._body.add_mass(amount)
@@ -239,10 +251,14 @@ class Creature:
         self._body.get_shape().set_pos(x, y)
 
     def clone(self):
-        memo_dict = {id(self._environment): None}
-        to_return = copy.deepcopy(self, memo_dict)
-        to_return._existing = False # G todo: remove variable _existing
-        return to_return
+        cloned_creature = Creature(self._body.clone(), self._name)
+        for organ in self._organs:
+            if organ is not self._body:
+                cloned_creature.add_organ(organ.clone())
+        cloned_creature.set_mass(self.get_mass())
+        cloned_creature.age = self.age
+        # G todo: remove variable _existing
+        return cloned_creature
 
     def mutate(self, mutation_model):
         for organ in self._organs:
@@ -269,6 +285,9 @@ class Organ:
 
     def __repr__(self):
         return self.__str__()
+
+    def __deepcopy__(self, memodict={}):
+        return self.clone()
 
     def register_input_neuron(self, neuron):
         self._input_neurons.append(neuron)
@@ -302,6 +321,10 @@ class Organ:
 
     def get_shape(self):
         pass
+
+    def clone(self):
+        print("invalid call in "+str(type(self)))
+        a = 1/0
 
 
 class Neuron:
@@ -361,12 +384,30 @@ class Brain(Organ):
         self._input_layer = []
         self._hidden_layer = []
         self._output_layer = []
+        self._layers = [self._input_layer, self._hidden_layer, self._output_layer]
 
         self._bias_input_layer = Neuron(identity_activation, "input bias")
         self._bias_hidden_layer = Neuron(identity_activation, "hidden bias")
 
         self.add_input_neuron(self._bias_input_layer)
         self.add_hidden_neuron(self._bias_hidden_layer)
+        self.t = threading.Thread(target=self.think_for_thread)
+        self.lock_0 = threading.Lock()
+        self.lock_1 = threading.Lock()
+        # print("acquire lock 0")
+        self.lock_0.acquire()
+        self.t.start()
+
+    def clone(self):
+        cloned_brain = Brain()
+        cloned_layers = copy.deepcopy(self._layers)
+        cloned_brain._input_layer = cloned_layers[0]
+        cloned_brain._hidden_layer = cloned_layers[1]
+        cloned_brain._output_layer = cloned_layers[2]
+        cloned_brain._layers = cloned_layers
+        cloned_brain._bias_input_layer = cloned_layers[0][0]
+        cloned_brain._bias_hidden_layer = cloned_layers[1][0]
+        return cloned_brain
 
     def add_input_neuron(self, neuron):
         self._input_layer.append(neuron)
@@ -398,15 +439,24 @@ class Brain(Organ):
         return len(self._hidden_layer) / 100  # G todo: replace with realistic tick cost
 
     def think(self):
-        #tick = time.time()
-        self._bias_input_layer.receive_fire(1.)
-        for input_neuron in self._input_layer:
-            input_neuron.fire()
-        self._bias_hidden_layer.receive_fire(1.)
-        for hidden_neuron in self._hidden_layer:
-            hidden_neuron.fire()
-        #for output_neuron in self._output_layer:
-        #    output_neuron.fire()
+        # print("releasing lock..")
+        self.lock_1.acquire()
+        self.lock_0.release()
+
+    def think_for_thread(self):
+        # tick = time.time()
+        while True:
+            # print("acquire lock 1")
+            self.lock_0.acquire()
+            self._bias_input_layer.receive_fire(1.)
+            for input_neuron in self._input_layer:
+                input_neuron.fire()
+            self._bias_hidden_layer.receive_fire(1.)
+            for hidden_neuron in self._hidden_layer:
+                hidden_neuron.fire()
+            self.lock_1.release()
+                # for output_neuron in self._output_layer:
+                #    output_neuron.fire()
 
     def wire_organ(self, organ):
         for input_neuron in organ.get_input_neurons():
@@ -445,6 +495,11 @@ class Mouth(Organ):
         self.register_output_neuron(self._eat_neuron)
         self.register_input_neuron(self._has_eaten_neuron)
 
+    def clone(self):
+        m = Mouth(self._body_distance, self._rotation, self._food_capacity, self._mouth_radius)
+        m._amount_eaten = self._amount_eaten
+        return m
+
     def tick_cost(self):
         return self._body_distance/10  # todo: replace with realistic tick cost
 
@@ -471,26 +526,30 @@ class Body(Organ):
         self._mass = 0
         self._initial_mass = mass
         self._shape = shape
-        self.set_mass(mass)
         self._max_mass_burn = max_mass_burn
 
-        self._total_mass_gained = 0
-
         self._rotation = angle
-        self._shape.set_radius(mass/20)
         # G todo: add collision neuron
         self._mass_neuron = InputNeuron("body: mass")
-
         self.register_input_neuron(self._mass_neuron)
+
+        self.mass_listeners = []
+        self.set_mass(mass)
+
+    def clone(self):
+        b = Body(self._mass, copy.deepcopy(self._shape), self._rotation, self._max_mass_burn)
+        b._initial_mass = self._initial_mass
+        return b
 
     def get_mass(self):
         return self._mass
 
     def set_mass(self, amount):
         self._mass = amount
-        self._shape.set_radius(amount/20)
-        if self._mass <= 0:
-            self._creature.kill()
+        self._shape.set_radius(math.sqrt(amount/2))
+        for mass_listener in self.mass_listeners:
+            mass_listener(self._mass)
+
         # G todo: change shape size to reflect mass change
 
     def add_mass(self, amount):
@@ -541,6 +600,9 @@ class Legs(Organ):
         self.register_output_neuron(self._forward_neuron)
         self.register_output_neuron(self._turn_clockwise_neuron)
 
+    def clone(self):
+        return Legs(self._max_speed, self._max_degree_turn)
+
     def execute(self):
         travel_factor = clip(self._forward_neuron.consume(), 0, 1)
         distance_to_travel = travel_factor * self._max_speed
@@ -571,6 +633,9 @@ class Fission(Organ):
         self._mutation_model = mutation_model
         self._fission_neuron = OutputNeuron("Fission: fission")
         self.register_output_neuron(self._fission_neuron)
+
+    def clone(self):
+        return Fission(copy.deepcopy(self._mutation_model))
 
     def execute(self):
         fission_value = self._fission_neuron.consume()
