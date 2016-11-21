@@ -45,6 +45,7 @@ class Food:
         self._shape = shape
         self.initial_mass = mass
         self.set_mass(mass)
+        self.environment = None
 
     def reduce_mass(self, amount):
         self.set_mass(self._mass-amount)
@@ -52,6 +53,11 @@ class Food:
     def set_mass(self, amount):
         self._mass = amount
         self._shape._radius = math.sqrt(self._mass/2)
+        if self._mass < 0.05:
+            self.kill()
+
+    def kill(self):
+        self.environment.remove_food(self)
 
     def get_shape(self):
         return self._shape
@@ -146,29 +152,31 @@ class Environment:
         if(max_mass > 0.05):
             tick = time.time()
             eaten = 0
-            food_eaten = set()
             remaining_capacity = max_mass
-            for food in self._food:
+            for food in copy.copy(self._food):
                 if shape.collides(food.get_shape()):
                     if remaining_capacity < food.get_mass():
                         food.reduce_mass(remaining_capacity)
                         eaten += remaining_capacity
-                        if food._shape.get_radius() < 0.2:
-                            food_eaten.add(food)
                         break
                     else:
                         eaten += food.get_mass()
-                        food_eaten.add(food)
+                        food.set_mass(0)
             #self._food.difference_update(food_eaten)  # = [filter(lambda f: f not in food_eaten, self._food)]
-            self._food -= food_eaten  # = [filter(lambda f: f not in food_eaten, self._food)]
             self._time_collision_food += (time.time()-tick)
             return eaten
         else:
             return 0
 
     def create_food(self, x, y, mass, radius):
-        self._food.add(Food(mass, shapes.Circle(x, y, radius)))
+        self.add_food(Food(mass, shapes.Circle(x, y, radius)))
 
+    def add_food(self, food):
+        self._food.add(food)
+        food.environment = self
+
+    def remove_food(self, food):
+        self._food.remove(food)
 
 class Creature:
     def __init__(self, body, name=None):
@@ -561,6 +569,8 @@ class Body(Organ):
         # G todo: add collision neuron
         self._mass_neuron = InputNeuron("body: mass")
         self.register_input_neuron(self._mass_neuron)
+        self._age_neuron = InputNeuron("body: age")
+        self.register_input_neuron(self._age_neuron)
 
         self.mass_listeners = []
         self.set_mass(mass)
@@ -604,6 +614,7 @@ class Body(Organ):
         return self._shape.get_y()
 
     def sense(self):
+        self._age_neuron.receive_fire(self._creature.age/max_age)
         self._mass_neuron.receive_fire(self._mass/self._initial_mass)
 
     def execute(self):
@@ -674,6 +685,7 @@ class Fission(Organ):
             self._creature.get_body().set_mass(new_mass)
 
             split_creature = self._creature.clone()
+            split_creature.age = 0
 
             split_creature._name = self._creature._name + "+"
 
