@@ -8,7 +8,9 @@ import numpy as np
 import operator
 
 # G todo: add some reusable way of mutating parameters. maybe using the Beta function?
-max_age = 250
+FOOD_GROWTH_RATE = 0.4
+MAX_AGE = 250
+MAX_FOOD_MASS = 100
 
 def random_pos(width, height, borders=0):
     return [random_from_interval(borders, width-borders), random_from_interval(borders, height-borders)]
@@ -66,7 +68,7 @@ class Food:
         return self._mass
 
     def tick(self):
-        self.set_mass(min(self.initial_mass, self._mass+0.1))
+        self.set_mass(min(MAX_FOOD_MASS, self._mass + FOOD_GROWTH_RATE))
 
 
 class Environment:
@@ -204,17 +206,26 @@ class Creature:
         if amount < self.organ_tick_cost*20:
             self.kill()
 
-    def add_organ(self, organ):
+    def add_organ(self, organ, mutation_model=None):
         if self._brain is not None:
-            self._brain.wire_organ(organ)
+            self._brain.wire_organ(organ, mutation_model)
         if type(organ) is Brain:
             self._brain = organ
             for old_organ in self._organs:
                 if old_organ is not self._brain:
                     self._brain.wire_organ(old_organ)
         self._organs.append(organ)
-
         organ._creature = self
+
+    def remove_organ(self, organ):
+        if self._brain is not None:
+            self._brain.unwire_organ(organ)
+        if type(organ) is Brain:
+            for wired_organ in self._organs:
+                if wired_organ is not self._brain:
+                    self._brain.unwire_organ(wired_organ)
+        self._organs.remove(organ)
+        organ._creature = None
 
     def sense(self):
         for organ in self._organs:
@@ -228,7 +239,7 @@ class Creature:
 
     def tick(self, tick_count):
         self.age += 1
-        if self.age > max_age:
+        if self.age > MAX_AGE:
             self.kill()
         self._last_tick_count = tick_count
         #print("Creature.tick()\tCreature.name()="+self._name)
@@ -288,6 +299,14 @@ class Creature:
         return cloned_creature
 
     def mutate(self, mutation_model):
+        if random.random() < mutation_model.mutation_likelihood:
+            new_organ = Mouth(random_from_interval(0.1, 3), random_from_interval(-10, 10))
+            self.add_organ(new_organ, mutation_model)
+            new_organ.mutate(mutation_model)
+        if random.random() < mutation_model.mutation_likelihood:
+            random_organ = self._organs[random.randrange(0, len(self._organs))]
+            if random_organ is not self._brain and random_organ is not self._body:
+                self.remove_organ(random_organ)
         for organ in self._organs:
             organ.mutate(mutation_model)
 
@@ -368,11 +387,16 @@ class Neuron:
     def __repr__(self):
         return self.__str__()
 
-    def connect_to_layer(self, neurons, weight=0):
+    def connect_to_layer(self, neurons, weight=0, mutation_model=None):
         for neuron in neurons:
-            self._connections[neuron] = weight
+            self.connect_to_neuron(neuron, weight, mutation_model)
 
-    def connect_to_neuron(self, neuron, weight=0):
+    def disconnect_from_neuron(self, neuron):
+        self._connections.pop(neuron)
+
+    def connect_to_neuron(self, neuron, weight=0, mutation_model=None):
+        if mutation_model is not None and random.random() < mutation_model.mutation_likelihood:
+            weight += random_from_interval(-mutation_model.mutation_strength, mutation_model.mutation_strength)
         self._connections[neuron] = weight
 
     def receive_fire(self, amount):
@@ -447,17 +471,23 @@ class Brain(Organ):
                     weight = from_neuron_other.get_weight(to_neuron_other)
                     from_neuron_this.connect_to_neuron(to_neuron_this, weight)
 
-
-
-    def add_input_neuron(self, neuron):
+    def add_input_neuron(self, neuron, mutation_model=None):
         self._input_layer.append(neuron)
-        neuron.connect_to_layer(self.hidden_layer)
+        neuron.connect_to_layer(self.hidden_layer, mutation_model=mutation_model)
         self.fill_hidden_layer(len(self._input_layer))
 
-    def add_output_neuron(self, neuron):
+    def add_output_neuron(self, neuron, mutation_model=None):
         self._output_layer.append(neuron)
-        Brain._connect_layer_to_neuron(self.hidden_layer, neuron)
+        Brain._connect_layer_to_neuron(self.hidden_layer, neuron, mutation_model=mutation_model)
         self.fill_hidden_layer(len(self._output_layer))
+
+    def remove_input_neuron(self, input_neuron):
+        self._input_layer.remove(input_neuron)
+
+    def remove_output_neuron(self, output_neuron):
+        for hidden_neuron in self.hidden_layer:
+            hidden_neuron.disconnect_from_neuron(output_neuron)
+        self._output_layer.remove(output_neuron)
 
     def add_hidden_neuron(self, neuron=None):
         if neuron is None:
@@ -471,9 +501,9 @@ class Brain(Organ):
             self.add_hidden_neuron()
 
     @staticmethod
-    def _connect_layer_to_neuron(layer, neuron):
+    def _connect_layer_to_neuron(layer, neuron, weight=0, mutation_model=None):
         for neuron_from in layer:
-            neuron_from.connect_to_neuron(neuron)
+            neuron_from.connect_to_neuron(neuron, weight, mutation_model)
 
     def tick_cost(self):
         return len(self.hidden_layer) / 100  # G todo: replace with realistic tick cost
@@ -498,15 +528,21 @@ class Brain(Organ):
                 # for output_neuron in self._output_layer:
                 #    output_neuron.fire()
 
-    def wire_organ(self, organ):
+    def wire_organ(self, organ, mutation_model=None):
         for input_neuron in organ.get_input_neurons():
-            self.add_input_neuron(input_neuron)
+            self.add_input_neuron(input_neuron, mutation_model)
         for output_neuron in organ.get_output_neurons():
-            self.add_output_neuron(output_neuron)
+            self.add_output_neuron(output_neuron, mutation_model)
+
+    def unwire_organ(self, organ):
+        for input_neuron in organ.get_input_neurons():
+            self.remove_input_neuron(input_neuron)
+        for output_neuron in organ.get_output_neurons():
+            self.remove_output_neuron(output_neuron)
 
     def mutate(self, mutation_level):
-        likelihood = mutation_level._mutation_likelihood
-        strength = mutation_level._mutation_strength * 2
+        likelihood = mutation_level.mutation_likelihood
+        strength = mutation_level.mutation_strength * 2
         for layer_index in range(len(self._layers)-1):
             from_layer = self._layers[layer_index]
             to_layer = self._layers[layer_index+1]
@@ -536,13 +572,25 @@ class Mouth(Organ):
         self.register_output_neuron(self.eat_neuron)
         self.register_input_neuron(self._has_eaten_neuron)
 
-    def mutate(self, mutation_level):
-        strength = mutation_level._mutation_strength/2
-        mut_prob = mutation_level._mutation_likelihood
+    def mutate(self, mutation_model):
+        strength = mutation_model.mutation_strength / 2
+        mut_prob = mutation_model.mutation_likelihood
+        if random.random() < mut_prob:
+            r = random.random()
+            if r < 0.3:
+                self._rotation += random_from_interval(-90, 90)
+            elif r < 0.5:
+                self._rotation *= -1
+            else:
+                self._rotation *= random_from_interval(1-strength, 1+strength)
         if random.random() < mut_prob:
             self._food_capacity *= random_from_interval(1-strength, 1+strength)
         if random.random() < mut_prob:
-            self._body_distance *= random_from_interval(1-strength, 1+strength)
+            r = random.random()
+            if r < 0.3:
+                self._body_distance = max(0, self._body_distance+random_from_interval(-3, +3))
+            else:
+                self._body_distance *= random_from_interval(1 - strength, 1 + strength)
         if random.random() < mut_prob:
             self._mouth_radius *= random_from_interval(1-strength, 1+strength)
             # G todo: change area by random factor, not radius!
@@ -600,6 +648,7 @@ class Body(Organ):
         return self._mass
 
     def set_mass(self, amount):
+        amount = max(0, amount)
         self._mass = amount
         self._shape.set_radius(math.sqrt(amount/2))
         for mass_listener in self.mass_listeners:
@@ -630,7 +679,7 @@ class Body(Organ):
         return self._shape.get_y()
 
     def sense(self):
-        self.age_neuron.receive_fire(self._creature.age / max_age)
+        self.age_neuron.receive_fire(self._creature.age / MAX_AGE)
         self.mass_neuron.receive_fire(self._mass / self._initial_mass)
 
     def execute(self):
@@ -670,7 +719,7 @@ class Legs(Organ):
         self._creature.get_environment().turn_creature(self._creature, angle_to_turn)
         self.distance_moved = self._creature.get_environment().move_creature(self._creature, distance_to_travel)
         mass_to_burn = distance_to_travel/200 + angle_to_turn/200  # G todo: replace with realistic formula
-        self._creature.add_mass(mass_to_burn)
+        self._creature.add_mass(-mass_to_burn)
 
     def get_forward_neuron(self):
         return self.forward_neuron
@@ -708,6 +757,7 @@ class Fission(Organ):
 
             split_creature = self._creature.clone()
             split_creature.age = 0
+            split_creature.get_body().set_rotation(random.random()*360)
 
             split_creature._name = self._creature._name + "+"
 
@@ -725,6 +775,6 @@ class MutationModel:
     # G mutation in general occurs? after all we might want to mutate each parameter in each organ differently as well,
     # G so just passing different parameters to the organ help that much either..
     def __init__(self, mutation_likelihood, mutation_strength):
-        self._mutation_likelihood = mutation_likelihood
-        self._mutation_strength = mutation_strength
+        self.mutation_likelihood = mutation_likelihood
+        self.mutation_strength = mutation_strength
 

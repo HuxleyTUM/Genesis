@@ -18,8 +18,7 @@ height = 120 * factor
 
 init_food_count = int(50 * factor ** 2)
 max_food_count = int(100 * factor ** 2)
-food_mass_min = 80
-food_mass_max = 130
+init_food_mass = 5
 
 init_creature_count = 5
 min_creature_count = int(5 * factor ** 2)
@@ -39,15 +38,13 @@ def create_number_listener(environment):
 
 
 def food_listener(environment):
-    if environment._tick_count % 10 /(factor**2) == 0 and len(environment._food) < max_food_count:
+    for i in range(len(environment._food), max_food_count):
         place_random_food(environment)
 
 
 def place_random_food(environment):
-    amount = random_from_interval(food_mass_min, food_mass_max)
-    food_radius = amount / 20
-    r_pos = random_pos(width, height, food_radius)
-    environment.create_food(r_pos[0], r_pos[1], amount, food_radius)
+    r_pos = random_pos(width, height)
+    environment.create_food(r_pos[0], r_pos[1], init_food_mass, 0)
 
 
 def place_random_creature(environment):
@@ -70,7 +67,8 @@ def place_random_creature(environment):
         creature.add_organ(mouth)
         creature.add_organ(fission)
 
-        creature.mutate(init_mutation_model)
+        for organ in creature.get_organs():
+            organ.mutate(init_mutation_model)
 
         r_pos = random_pos(width, height, creature_radius)
         creature.set_pos(r_pos[0], r_pos[1])
@@ -82,7 +80,7 @@ def create_master_creature():
     body = gen.Body(start_mass, shapes.Circle(0, 0, creature_radius))
     brain = gen.Brain()
     legs = gen.Legs()
-    mouth = gen.Mouth(0, 0)
+    mouth = gen.Mouth(1, 0)
     fission = gen.Fission(mutation_model)
 
     creature = gen.Creature(body, name)

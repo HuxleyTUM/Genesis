@@ -57,7 +57,7 @@ class PyGame(Renderer):
                     shapes_to_render.append(copy.deepcopy(organ.get_shape()))
                     pixels.append((0, 255, 0))
             shapes_to_render.append(copy.deepcopy(creature.get_body().get_shape()))
-            pixels.append((0, 0, 255 - 200*(creature.age/gen.max_age)))
+            pixels.append((0, 0, 255 - 200*(creature.age / gen.MAX_AGE)))
         for food in self._environment._food:
             shapes_to_render.append(copy.deepcopy(food.get_shape()))
             pixels.append((255, 0, 0))
