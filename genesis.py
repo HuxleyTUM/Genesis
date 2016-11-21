@@ -4,7 +4,6 @@ import copy
 import shapes
 import random
 import time
-from msvcrt import getch
 import numpy as np
 import operator
 
@@ -39,6 +38,7 @@ class Food:
 
     def reduce_mass(self, amount):
         self._mass -= amount
+        self._shape._radius = self._mass / 20.
 
     def get_shape(self):
         return self._shape
@@ -61,7 +61,8 @@ class Environment:
         self._time_collision_food = 0
         self._time_collision_creatures = 0
         self._time_thinking = 0
-        self._last_tick_time = -1
+        self.last_tick_time = -1
+        self.last_tick_delta = -1
 
     def queue_creature(self, creature):
         self._queued_creatures.append(creature)
@@ -89,7 +90,9 @@ class Environment:
         self._tick_count += 1
         for listener in self._tick_listeners:
             listener(self)
-        self._last_tick_time = time.time()
+        current_time = time.time()
+        self.last_tick_delta = current_time - self.last_tick_time
+        self.last_tick_time = current_time
 
     def move_creature(self, creature, distance_to_travel):
         tick = time.time()
@@ -122,23 +125,26 @@ class Environment:
     #    return [dx, dy]  # G todo: return actual absolute position
 
     def consume_food(self, shape, max_mass):
-        tick = time.time()
-        eaten = 0
-        food_eaten = set()
-        capacity_available = max_mass
-        for food in self._food:
-            if shape.collides(food.get_shape()):
-                if capacity_available < food.get_mass():
-                    food.reduce_mass(capacity_available)
-                    eaten += capacity_available
-                    break
-                else:
-                    eaten += food.get_mass()
-                    food_eaten.add(food)
-        #self._food.difference_update(food_eaten)  # = [filter(lambda f: f not in food_eaten, self._food)]
-        self._food -= food_eaten  # = [filter(lambda f: f not in food_eaten, self._food)]
-        self._time_collision_food += (time.time()-tick)
-        return eaten
+        if(max_mass > 0.001):
+            tick = time.time()
+            eaten = 0
+            food_eaten = set()
+            remaining_capacity = max_mass
+            for food in self._food:
+                if shape.collides(food.get_shape()):
+                    if remaining_capacity < food.get_mass():
+                        food.reduce_mass(remaining_capacity)
+                        eaten += remaining_capacity
+                        break
+                    else:
+                        eaten += food.get_mass()
+                        food_eaten.add(food)
+            #self._food.difference_update(food_eaten)  # = [filter(lambda f: f not in food_eaten, self._food)]
+            self._food -= food_eaten  # = [filter(lambda f: f not in food_eaten, self._food)]
+            self._time_collision_food += (time.time()-tick)
+            return eaten
+        else:
+            return 0
 
     def create_food(self, x, y, mass, radius):
         self._food.add(Food(mass, shapes.Circle(x, y, radius)))
@@ -446,7 +452,7 @@ class Mouth(Organ):
         return self._body_distance  # todo: replace with realistic tick cost
 
     def get_pos(self):
-        [dx, dy] = convert_to_delta_distance(self._body_distance, self._rotation)
+        [dx, dy] = convert_to_delta_distance(self._body_distance, self._rotation+self._creature.get_body()._rotation)
         return [self._creature.get_x() + dx, self._creature.get_y() + dy]
 
     def get_shape(self):

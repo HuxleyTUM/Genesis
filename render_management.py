@@ -1,5 +1,6 @@
 import threading
 import time
+import pygame
 
 
 class Manager:
@@ -7,8 +8,8 @@ class Manager:
         self._running = False
         self._physics = physics
         self._render = render
-        self._render_delta = 1/1
-        self._physics_delta = 1/2
+        self._render_delta = 1/30
+        self._physics_delta = 1/60
         self._last_physics_call = -1
         self._last_render_call = -1
 
@@ -16,12 +17,21 @@ class Manager:
         self._running = True
         t = threading.Thread(target=self.run)
         t.start()
+        while True:
+            for event in pygame.event.get():  # User did something
+                if event.type == pygame.QUIT:  # If user clicked close
+                    pygame.quit()
 
     def stop(self):
         self._running = False
 
     def run(self):
         while self._running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self._running = False
+                    pygame.quit()
+                    # sys.exit()
             current_time = time.time()
             time_to_next_physics_call = (self._last_physics_call + self._physics_delta) - current_time
             time_to_next_render_call = (self._last_render_call + self._render_delta) - current_time

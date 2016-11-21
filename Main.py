@@ -8,12 +8,12 @@ import operator
 import pygame
 
 start_mass = 200
-start_energy = 300
+start_energy = 100
 mutation_model = gen.MutationModel(0.1, 1)
 init_mutation_model = gen.MutationModel(1, 1)
 creature_radius = 5
-width = 300
-height = 50
+width = 90
+height = 60
 
 init_food_count = 50
 max_food_count = 100
@@ -61,7 +61,7 @@ def place_random_creature(environment):
     body = gen.Body(start_energy, start_mass, shapes.Circle(r_pos[0], r_pos[1], creature_radius))
     brain = gen.Brain()
     legs = gen.Legs()
-    mouth = gen.Mouth(1, 0)
+    mouth = gen.Mouth(3, 0)
     fission = gen.Fission(mutation_model)
 
     creature = gen.Creature(body, name)
@@ -89,7 +89,7 @@ def start(width, height):
 
     environment._tick_listeners.append(food_listener)
     environment._tick_listeners.append(create_number_listener)
-    renderer = rendering.AsciiRenderer(environment)
+    renderer = rendering.PyGame(environment)
     manager = render_management.Manager(environment.tick, renderer.render)
     manager.start()
 
