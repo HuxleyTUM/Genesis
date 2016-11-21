@@ -36,16 +36,23 @@ class Food:
     def __init__(self, mass, shape):
         self._mass = mass
         self._shape = shape
+        self.initial_mass = mass
 
     def reduce_mass(self, amount):
-        self._mass -= amount
-        self._shape._radius = self._mass / 20.
+        self.set_mass(self._mass-amount)
+
+    def set_mass(self, amount):
+        self._mass = amount
+        self._shape._radius = math.sqrt(self._mass/2)
 
     def get_shape(self):
         return self._shape
 
     def get_mass(self):
         return self._mass
+
+    def tick(self):
+        self.set_mass(min(self.initial_mass, self._mass+0.1))
 
 
 class Environment:
@@ -76,6 +83,8 @@ class Environment:
         creature._alive = False
 
     def tick(self):
+        for food in self._food:
+            food.tick()
         for creature in self._queued_creatures:
             if creature._alive:
                 self._living_creatures.append(creature)
