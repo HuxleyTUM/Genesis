@@ -8,6 +8,7 @@ import pygame
 import sys
 from pygame.locals import *
 import genesis as gen
+import binary_tree as bt
 
 lock = threading.Lock()
 
@@ -29,6 +30,7 @@ def listen_for_key(self):
             if f is not None and o is not None:
                 f(o)
 
+
 class Renderer:
     def __init__(self, environment):
         self._environment = environment
@@ -36,21 +38,40 @@ class Renderer:
     def render(self):
         pass
 
+rects_previously_rendered = []
 
-class PyGame(Renderer):
+
+class PyGameRenderer(Renderer):
     def __init__(self, environment, render_width=900, render_height=600):
         pygame.init()
         self.screen = pygame.display.set_mode((render_width, render_height))
         super().__init__(environment)
-        self._render_width = render_width
-        self._render_height = render_height
-        self._render_left = 0
-        self._render_top = 0
+        self._render_dimensions = [render_width, render_height]
+        self._render_pos = [0, 0]
         self._last_render_time = -1
+        self._last_rendered_rects = []
 
     def render(self):
+        clock = self._environment.time[gen.RENDER_KEY]
+        clock.tick()
+        render_time = time.time()
+
         shapes_to_render = []
         pixels = []
+
+        # ## #
+        # the following is a visualisation of the binary tree. uncomment to see how the food pellets are classified
+        # ###
+        # root_axis = self._environment.food_tree.root_node.axis
+        # shapes_to_render.append(root_axis)
+        # pixels.append((255, 0, 0))
+        # collision_circle = shapes.Circle(self._environment.tick_count, self._environment.tick_count, 6)
+        # shapes_to_render.append(collision_circle)
+        # pixels.append((0, 255, 255))
+        # for food_pellet in self._environment.food_tree.get_collision_candidates(collision_circle):
+        #     shapes_to_render.append(food_pellet.shape)
+        #     pixels.append((255, 0, 255))
+
         for creature in self._environment.living_creatures:
             for organ in creature.organs:
                 shape = organ.shape
@@ -59,10 +80,13 @@ class PyGame(Renderer):
                     pixels.append((0, 255, 0))
             shapes_to_render.append(copy.deepcopy(creature.body.shape))
             pixels.append((0, 0, 255 - 200*(creature.age / gen.MAX_AGE)))
-        for food in self._environment.food_pellets:
+        for food in self._environment.food_tree.elements:
             shapes_to_render.append(copy.deepcopy(food.shape))
             pixels.append((255, 0, 0))
-        additional = ["width(w): " + str(self._render_width), "height(h): " + str(self._render_height),
+        rects_to_render = []
+        for shape in shapes_to_render:
+            rects_to_render.append(shape.to_bounding_box())
+        additional = ["width(w): " + str(self._render_dimensions[0]), "height(h): " + str(self._render_dimensions[1]),
                       "ticks: " + str(self._environment.tick_count),
                       "frames/s: " + str(1 / (time.time() - self._last_render_time)),
                       "physics/s: " + str(1 / max(self._environment.last_tick_delta, 0.00001))
@@ -72,28 +96,34 @@ class PyGame(Renderer):
         for creature in sorted(self._environment.living_creatures, key=lambda x: x.mass):
             side_info.append(creature.name + ": " + str(creature.mass))
 
-        t = threading.Thread(target=render_with_pygame, args=(self.screen, shapes_to_render, pixels, additional, side_info,
-                                                              self._render_width, self._render_height,
-                                                              self._render_left,
-                                                              self._render_top, self._environment.width,
-                                                              self._environment.height))
+        t = threading.Thread(target=render_with_pygame, args=(self._environment,
+                                                              self.screen, shapes_to_render, pixels, additional,
+                                                              side_info, rects_previously_rendered,
+                                                              self._render_dimensions, self._render_pos,
+                                                              [self._environment.width, self._environment.height]))
         t.start()
+        clock.tock()
 
 
-def render_with_pygame(screen, shapes_to_render, pixels, additionals, side_infos, output_width, output_height,
-                       x_init, y_init, width, height):
+def render_with_pygame(env, screen, shapes_to_render, pixels, additionals, side_infos, rects_previously_rendered,
+                       render_dimensions, pos, source_dimensions):
     lock.acquire()
-    x_scaling = output_width / width
-    y_scaling = output_height / height
+    clock = env.time[gen.RENDER_THREAD_KEY]
+    clock.tick()
+
+    scaling = np.divide(render_dimensions, source_dimensions)
 
     screen.fill((0, 0, 0))
+
+    # for shape in rects_to_render:
+    #     draw_shape(shape, screen, (255, 0, 255, 0), scaling, render_dimensions)
+    rects = []
     for shape, colour in zip(reversed(shapes_to_render), reversed(pixels)):
-        top_left = ((shape.x - shape.radius) * x_scaling,
-                    (shape.y - shape.radius) * y_scaling)
-        dimensions = (int(round(shape.radius * x_scaling * 2)), int(round(shape.radius * y_scaling)*2))
-        rect = (top_left[0], top_left[1], dimensions[0], dimensions[1])
-        pygame.draw.ellipse(screen, colour+(0,), rect, 0)
-        # pygame.draw.circle()
+        c = colour+(0,)
+        drawn = draw_shape(shape, screen, c, scaling, render_dimensions)
+        rects.append(drawn)
+
+    # pygame.draw.circle()
     # i = 0
     # for additional in additionals[3:4]:
     #     font = pygame.font.Font(None, 36)
@@ -102,8 +132,33 @@ def render_with_pygame(screen, shapes_to_render, pixels, additionals, side_infos
     #     # textpos. = ().centerx
     #     screen.blit(text, (0, 36/2+26*i))
     #     i += 1
-    pygame.display.update()
+    pygame.display.update(rects + rects_previously_rendered)
+    del rects_previously_rendered[:]
+    rects_previously_rendered += rects
+    clock.tock()
     lock.release()
+
+
+def transform_to_bounding(shape, scaling, render_dimensions):
+    top_left = (shape.left * scaling[0], shape.down * scaling[1])
+    shape_dimensions = (int(round(shape.width * scaling[0])),
+                        int(round(shape.height * scaling[1])))
+    rect = (top_left[0], top_left[1], shape_dimensions[0], shape_dimensions[1])
+    return rect
+
+
+def draw_shape(shape, screen, colour, scaling, render_dimensions):
+    rect = transform_to_bounding(shape, scaling, render_dimensions)
+    if type(shape) is shapes.Circle:
+        pygame.draw.ellipse(screen, colour, rect, 0)
+    elif type(shape) is shapes.Axis:
+        screen_pos_from = np.multiply(shape.center, scaling)
+        screen_pos_to = copy.copy(screen_pos_from)
+        screen_pos_to[shape.dimension] = render_dimensions[shape.dimension]
+        pygame.draw.line(screen, colour, screen_pos_from, screen_pos_to)
+    elif type(shape) is shapes.Rectangle:
+        pygame.draw.rect(screen, colour, rect, 0)
+    return rect
 
 
 class AsciiRenderer(Renderer):

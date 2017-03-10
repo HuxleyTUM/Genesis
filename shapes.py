@@ -1,88 +1,431 @@
 import math
-
 import numpy
+
+
+class Orientation:
+    def __init__(self, direction, opposite=None):
+        self.__direction = direction
+        if opposite is None:
+            opposite = Orientation((-direction[0], -direction[1]), self)
+        self._opposite = opposite
+
+    @property
+    def reversed(self):
+        return self._opposite
+
+LEFT = Orientation((-1, 0))
+DOWN = Orientation((0, -1))
+RIGHT = LEFT.reversed
+UP = DOWN.reversed
+
+FOUR_WAY_ORIENTATIONS = [LEFT, DOWN, RIGHT, UP]
 
 
 class Shape:
     @property
-    def x(self):
+    def center_x(self):
         raise Exception("Not implemented!")
 
-    @x.setter
-    def x(self, x):
+    @center_x.setter
+    def center_x(self, x):
+        raise Exception("Not implemented!")
+
+    @property
+    def center_y(self):
+        raise Exception("Not implemented!")
+
+    @center_y.setter
+    def center_y(self, y):
         raise Exception("Not implemented!")
 
     @property
-    def y(self):
-        raise Exception("Not implemented!")
+    def center(self):
+        return self.center_x, self.center_y
 
-    @y.setter
-    def y(self, y):
-        raise Exception("Not implemented!")
-
-    def translate(self, dx, dy):
-        self.pos = [self.x() + dx, self.y() + dy]
-
-    @property
-    def pos(self):
-        raise Exception("Not implemented!")
-
-    @pos.setter
-    def pos(self, pos):
-        raise Exception("Not implemented!")
-    
-    def collides(self, other):
-        raise Exception("Not implemented!")
-    
-    def collides_with_circle(self, circle):
-        raise Exception("Not implemented!")
+    @center.setter
+    def center(self, pos):
+        self.center_x = pos[0]
+        self.center_y = pos[1]
 
     @property
     def dimensions(self):
+        return self.width, self.height
+
+    @dimensions.setter
+    def dimensions(self, dimensions):
+        self.width = dimensions[0]
+        self.height = dimensions[1]
+
+    @property
+    def width(self):
         raise Exception("Not implemented!")
+
+    @width.setter
+    def width(self, width):
+        raise Exception("Not implemented!")
+
+    @property
+    def height(self):
+        raise Exception("Not implemented!")
+
+    @height.setter
+    def height(self, height):
+        raise Exception("Not implemented!")
+
+    @property
+    def left(self):
+        return self.center_x - self.width/2
+
+    @property
+    def down(self):
+        return self.center_y - self.height/2
+
+    @property
+    def up(self):
+        return self.center_y + self.height/2
+
+    @property
+    def right(self):
+        return self.center_x + self.width/2
+
+    def to_bounding_box(self):
+        return Rectangle(self.left, self.down, self.width, self.height)
+
+    def translate(self, dx, dy):
+        self.center = [self.center_x() + dx, self.center_y() + dy]
+
+    def point_lies_within(self, point):
+        raise Exception("Not implemented!")
+
+    def collides(self, other):
+        raise Exception("Not implemented!")
+    
+    def collides_with_axis(self, axis):
+        raise Exception("Not implemented!")
+
+    def collides_with_circle(self, circle):
+        raise Exception("Not implemented!")
+
+    def collides_with_line_segment(self, line_segment):
+        raise Exception("Not implemented!")
+
+    def collides_with_rectangle(self, rectangle):
+        raise Exception("Not implemented!")
+
+    def bounding_boxes_collide(self, other):
+        return self.left < other.right and self.right > other.left and \
+               self.down < other.up and self.up > other.down
+
+
+class Axis(Shape):
+    def __init__(self, offset, dimension):
+        self.offset = offset
+        self.dimension = dimension
+
+    @property
+    def other_dimension(self):
+        return (self.dimension + 1) % 2
+
+    @property
+    def center(self):
+        to_return = [0, 0]
+        to_return[self.other_dimension] = self.offset
+        return to_return
+
+    @property
+    def center_x(self):
+        return self.offset if self.dimension == 0 else 0
+
+    @property
+    def center_y(self):
+        return self.offset if self.dimension == 1 else 0
+    
+    @property
+    def width(self):
+        return math.inf if self.dimension == 0 else 0
+
+    @property
+    def height(self):
+        return math.inf if self.dimension == 1 else 0
+
+    def collides(self, other):
+        return other.collides_with_axis(self)
+
+    def collides_with_axis(self, axis):
+        return axis.dimension != self.dimension or axis.offset == self.offset
+
+    def collides_with_circle(self, circle):
+        return circle.collides_with_axis(self)
+
+    def collides_with_line_segment(self, line_segment):
+        return line_segment.collides_with_axis(self)
+
+    def collides_with_rectangle(self, rectangle):
+        return rectangle.collides_with_axis(self)
 
 
 class Circle(Shape):
-    def __init__(self, x, y, radius):
-        self.__x = x
-        self.__y = y
+    def __init__(self, center, radius):
+        self.__center = center
         self.__radius = radius
-        
-    @property
-    def pos(self):
-        return [self.__x, self.__y]
 
     @property
-    def x(self):
-        return self.__x
+    def center_x(self):
+        return self.__center[0]
+
+    @center_x.setter
+    def center_x(self, x):
+        self.__center[0] = x
 
     @property
-    def y(self):
-        return self.__y
+    def center_y(self):
+        return self.__center[1]
 
-    @pos.setter
-    def pos(self, pos):
-        self.__x = pos[0]
-        self.__y = pos[1]
-        
-    def collides(self, other):
-        return other.collides_with_circle(self)
-    
-    def collides_with_circle(self, circle):
-        other_pos = circle.pos
-        distance = numpy.linalg.norm([self.__x - other_pos[0], self.__y - other_pos[1]])
-        # distance = math.sqrt((self.__x - other_pos[0]) ** 2 + (self.__y - other_pos[1]) ** 2)
-        return distance < self.__radius + circle.radius
-            
+    @center_y.setter
+    def center_y(self, y):
+        self.__center[1] = y
+
+    @property
+    def center(self):
+        return self.__center
+
+    @center.setter
+    def center(self, pos):
+        self.__center = pos
+
     @property
     def dimensions(self):
-        return [self.__radius, self.__radius]
-        
+        return self.__radius, self.__radius
+
+    @property
+    def width(self):
+        return self.__radius * 2
+
+    @property
+    def height(self):
+        return self.__radius * 2
+
     @property
     def radius(self):
         return self.__radius
-    
+        
     @radius.setter
     def radius(self, radius):
         self.__radius = radius
 
+    def point_lies_within(self, point):
+        distance = numpy.linalg.norm([self.__center[0] - point[0], self.__center[1] - point[1]])
+        return distance < self.__radius
+
+    def collides(self, other):
+        return other.collides_with_circle(self)
+
+    def collides_with_axis(self, axis):
+        circle_offset = self.center[axis.other_dimension]
+        return circle_offset + self.__radius > axis.offset > circle_offset - self.__radius
+
+    def collides_with_circle(self, circle):
+        distance = numpy.linalg.norm([self.__center[0] - circle.center_x, self.__center[1] - circle.center_y])
+        return distance < self.__radius + circle.radius
+
+    def collides_with_line_segment(self, line_segment):
+        return line_segment.collides_with_circle(self)
+
+    def collides_with_rectangle(self, rectangle):
+        return rectangle.collides_with_circle(self)
+
+class LineSegment(Shape):
+    def __init__(self, start_point, end_point):
+        self.__start = start_point
+        self.__end = end_point
+
+    @property
+    def start_point(self):
+        return self.start_point
+
+    @property
+    def start_point_x(self):
+        return self.start_point[0]
+
+    @property
+    def start_point_y(self):
+        return self.start_point[1]
+
+    @property
+    def end_point(self):
+        return self.end_point[0], self.end_point[1]
+
+    @property
+    def end_point_x(self):
+        return self.end_point[0]
+
+    @property
+    def end_point_y(self):
+        return self.end_point[1]
+
+    def to_vector(self):
+        return self.width, self.height
+
+    def intersect_with_line_segment(self, line_segment):
+        width = self.width
+        height = self.height
+        other_width = line_segment.width
+        other_height = line_segment.height
+
+        dx = self.start_point_x - line_segment.start_point_x
+        dy = self.start_point_y - line_segment.start_point_y
+        denominator = -other_width * height + width * other_height
+        s = (-height * dx + width * dy) / denominator
+        t = (other_width * dy - other_height * dx) / denominator
+
+        if 0 <= s <= 1 and 0 <= t <= 1:
+            return self.start_point_x + (t * width), self.start_point_y + (t * height)
+        return None
+
+    def point_lies_within(self, point):
+        return False
+
+    def collides(self, other):
+        return other.collides_with_line(self)
+
+    def collides_with_axis(self, axis):
+        return axis.collides_with_line_segment(self)
+
+    def collides_with_circle(self, circle):
+        vector = flip_vector(self.to_vector())
+        circle_center = circle.center
+        line_from_circle = LineSegment(circle_center, (circle_center[0] + vector[0], circle_center[1] + vector[1]))
+        intersection = line_from_circle.intersect_with_line_segment(self)
+        return circle.point_lies_within(intersection)
+
+    def collides_with_line_segment(self, line):
+        return self.intersect_with_line_segment(line) is not None
+
+    def collides_with_rectangle(self, rectangle):
+        return rectangle.collides_with_line_segment(self)
+
+
+class Rectangle(Shape):
+    def __init__(self, left, down, width, height):
+        self.__left = left
+        self.__down = down
+        self.__width = width
+        self.__height = height
+
+    @property
+    def center_x(self):
+        return self.__left + self.__width / 2
+
+    @property
+    def center_y(self):
+        return self.__down + self.__height / 2
+
+    @property
+    def left(self):
+        return self.__left
+
+    @property
+    def down(self):
+        return self.__down
+
+    @property
+    def right(self):
+        return self.__left + self.__width
+
+    @property
+    def up(self):
+        return self.__down + self.__height
+
+    @property
+    def dimensions(self):
+        return [self.__width, self.__height]
+
+    @property
+    def width(self):
+        return self.__width
+
+    @width.setter
+    def width(self, width):
+        self.__width = width
+
+    @property
+    def height(self):
+        return self.__height
+
+    @height.setter
+    def height(self, height):
+        self.__height = height
+
+    def left_bottom(self):
+        return self.__left, self.__down
+
+    def bottom_right(self):
+        return self.__down, self.right
+
+    def right_top(self):
+        return self.right, self.up
+
+    def top_left(self):
+        return self.up, self.__left
+
+    def left_segment(self):
+        return LineSegment(self.top_left(), self.left_bottom())
+
+    def down_segment(self):
+        return LineSegment(self.left_bottom(), self.bottom_right())
+
+    def right_segment(self):
+        return LineSegment(self.bottom_right(), self.right_top())
+
+    def up_segment(self):
+        return LineSegment(self.right_top(), self.top_left())
+
+    _RECTANGLE_ORIENTATION_SEGMENT_MAPPING = {LEFT: left_segment, DOWN: down_segment,
+                                              RIGHT: right_segment, UP: up_segment}
+
+    def get_segment(self, orientation):
+        return Rectangle._RECTANGLE_ORIENTATION_SEGMENT_MAPPING[orientation](self)
+
+    def point_lies_within(self, point):
+        return self.__left < point[0] < self.right and self.down < point[1] < self.up
+
+    def collides(self, other):
+        return other.collides_with_rectangle(self)
+
+    def collides_with_axis(self, axis):
+        self.up > axis.offset > self.__down if axis.dimension == 0 else \
+            self.right > axis.offset > self.__left
+
+    def collides_with_circle(self, circle):
+        if self.__left > circle.right or self.right < circle.left or \
+                        self.up < circle.down or self.down > circle.up:
+            return False
+        if self.point_lies_within(circle.center):
+            return True
+        for orientation in FOUR_WAY_ORIENTATIONS:
+            segment = self.get_segment(orientation)
+            if segment.collides_with_circle(circle):
+                return True
+        return False
+
+    def collides_with_line_segment(self, line_segment):
+        if not self.bounding_boxes_collide(line_segment):
+            return False
+        if self.point_lies_within(line_segment.start_point):
+            return True
+        for orientation in FOUR_WAY_ORIENTATIONS[0:2]:
+            segment = self.get_segment(orientation)
+            if segment.collides_with_line_segment(line_segment):
+                return True
+        return False
+
+    def collides_with_rectangle(self, rectangle):
+        return self.bounding_boxes_collide(rectangle)
+
+
+def flip_vector(vector):
+    return -vector[1], vector[0]
+
+
+X_AXIS = Axis(0, 0)
+Y_AXIS = Axis(0, 1)
