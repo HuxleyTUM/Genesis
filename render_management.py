@@ -45,7 +45,3 @@ class Manager:
                     time.sleep(time_to_next_render_call)
                 self._last_render_call = time.time()
                 self._render()
-
-
-
-

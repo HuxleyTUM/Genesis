@@ -31,19 +31,19 @@ def create_number_listener(environment):
 
 def food_listener(environment):
     if environment.tick_count % 50 == 0:
-        for key, value in environment.time.items():
+        for key, value in environment.clocks.items():
             print(key+", "+str(value))
-            environment.time[key].reset()
-    #     print("total time ticking: "+str(environment.time_ticking))
-    #     print("time thinking: "+str(environment.time_thinking))
-    #     print("time food consumption: "+str(environment.time_consumption_food))
-    #     print("time food collision: "+str(environment.time_collision_food))
-    #     print("time creature sensing: "+str(environment.time_creature_sensing))
-    #     print("time creature ticking: "+str(environment.time_creature_ticking))
-    #     print("time creature executing: "+str(environment.time_creature_executing))
-    #     print("time creature collision: "+str(environment.time_collision_creatures))
-    #     print("time fission: "+str(environment.time_fission_executing))
-    #     print("times: "+str(environment.times))
+            environment.clocks[key].reset()
+    #     print("total time ticking: "+str(environment.clocks_ticking))
+    #     print("time thinking: "+str(environment.clocks_thinking))
+    #     print("time food consumption: "+str(environment.clocks_consumption_food))
+    #     print("time food collision: "+str(environment.clocks_collision_food))
+    #     print("time creature sensing: "+str(environment.clocks_creature_sensing))
+    #     print("time creature ticking: "+str(environment.clocks_creature_ticking))
+    #     print("time creature executing: "+str(environment.clocks_creature_executing))
+    #     print("time creature collision: "+str(environment.clocks_collision_creatures))
+    #     print("time fission: "+str(environment.clocks_fission_executing))
+    #     print("times: "+str(environment.clockss))
     #     print("organ times: "+str(environment.organ_times))
     #     print("organ clone times: "+str(environment.organ_clone_time))
     for i in range(environment.food_tree.size, max_food_count):
@@ -141,7 +141,10 @@ def start(width, height):
 
     environment.add_tick_listener(food_listener)
     environment.add_tick_listener(create_number_listener)
-    renderer = rendering.PyGameRenderer(environment)
+    renderer = rendering.PyGameRenderer((environment.width, environment.height),
+                                        render_clock=environment.clocks[gen.RENDER_KEY],
+                                        thread_render_clock=environment.clocks[gen.RENDER_THREAD_KEY])
+    environment.renderer = renderer
     manager = render_management.Manager(environment.tick, renderer.render)
     manager.start()
 
