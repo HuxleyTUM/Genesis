@@ -13,7 +13,7 @@ render_lock = threading.Lock()
 graphics_counter = 0
 
 
-class Graphics:
+class Graphic:
     def __init__(self):
         self.has_changed_listeners = []
 
@@ -27,12 +27,31 @@ class Graphics:
         for listener in self.has_changed_listeners:
             listener()
 
+    @property
+    def bounding_box(self):
+        raise Exception("Not implemented!")
 
-class ShapedGraphics(Graphics):
+
+class TextGraphic(Graphic):
+    def __init__(self, text, font, position):
+        super().__init__()
+        (width, height) = font.size(text)
+        self.__bounding_box = shapes.Rectangle(position[0], position[1], width, height)
+        self.text = text
+        self.label = font.render(text, 1, (255, 255, 255))
+        # screen.blit(label, (100, 100))
+
+    @property
+    def bounding_box(self):
+        return self.__bounding_box
+
+
+class ShapedGraphic(Graphic):
     def __init__(self):
         super().__init__()
 
-    def get_bounding_box(self):
+    @property
+    def bounding_box(self):
         return self.shape.to_bounding_box()
 
     @property
@@ -44,7 +63,7 @@ class ShapedGraphics(Graphics):
         raise Exception("Not implemented!")
 
 
-class OutlineGraphics(ShapedGraphics):
+class OutlineGraphic(ShapedGraphic):
     def __init__(self):
         super().__init__()
 
@@ -61,7 +80,7 @@ class OutlineGraphics(ShapedGraphics):
         raise Exception("Not implemented!")
 
 
-class SimpleOutlineGraphics(OutlineGraphics):
+class SimpleOutlineGraphic(OutlineGraphic):
     def __init__(self, shape, border_colour):
         super().__init__()
         self._border_colour = border_colour
@@ -80,7 +99,7 @@ class SimpleOutlineGraphics(OutlineGraphics):
         self._shape = shape
 
 
-class MonoColouredGraphics(ShapedGraphics):
+class MonoColouredGraphic(ShapedGraphic):
     def __init__(self):
         super().__init__()
 
@@ -101,7 +120,7 @@ class MonoColouredGraphics(ShapedGraphics):
         raise Exception("Not implemented!")
 
 
-class SimpleMonoColouredGraphics(MonoColouredGraphics):
+class SimpleMonoColouredGraphic(MonoColouredGraphic):
     def __init__(self, shape, fill_colour):
         super().__init__()
         self._fill_colour = fill_colour
@@ -151,21 +170,165 @@ def listen_for_key(self):
 
 
 class Camera:
-    def __init__(self, screen, render_dimensions, pos, source_dimensions):
-        self.source_dimensions = source_dimensions
-        self.pos = pos
-        self.render_dimensions = render_dimensions
-        self.screen = screen
+    def __init__(self, canvas_offset, canvas_dimensions, screen_offset, screen_dimensions):
+        self._canvas_dimensions = canvas_dimensions
+        self.canvas_offset = canvas_offset
+        self.screen_offset = screen_offset
+        self._screen_dimensions = screen_dimensions
+        self.__update_scaling()
+
+    def __update_scaling(self):
+        self.scaling = np.divide(self._screen_dimensions, self._canvas_dimensions)
+    
+    @property
+    def canvas_dimensions(self):
+        return self._canvas_dimensions
+    
+    @canvas_dimensions.setter
+    def canvas_dimensions(self, canvas_dimensions):
+        self._canvas_dimensions = canvas_dimensions
+        self.__update_scaling()
+
+    @property
+    def screen_dimensions(self):
+        return self._screen_dimensions
+    
+    @screen_dimensions.setter
+    def screen_dimensions(self, screen_dimensions):
+        self._screen_dimensions = screen_dimensions
+        self.__update_scaling()
+    
+    def transform_point_to_canvas(self, point):
+        return (point[0] - self.screen_offset[0]) / self.scaling[0] + self.canvas_offset[0], \
+               (point[1] - self.screen_offset[1]) / self.scaling[1] + self.canvas_offset[1]
+
+    def transform_point_to_screen(self, point):
+        return (point[0] - self.canvas_offset[0]) * self.scaling[0] + self.screen_offset[0], \
+               (point[1] - self.canvas_offset[1]) * self.scaling[1] + self.screen_offset[1]
+    
+    def transform_x_to_screen(self, x_value):
+        return x_value * self.scaling[0]
+    
+    def transform_y_to_screen(self, y_value):
+        return y_value * self.scaling[1]
+
+    def transform_shape_to_screen_bounding(self, shape):
+        left_down = self.transform_point_to_screen((shape.left, shape.down))
+        right_up = self.transform_point_to_screen((shape.right, shape.up))
+        shape_dimensions = (int(round(right_up[0] - left_down[0])),
+                            int(round(right_up[1] - left_down[1])))
+        rect = (left_down[0], left_down[1], shape_dimensions[0], shape_dimensions[1])
+        return rect
+
+
+class Screen:
+    def __init__(self, dimensions):
+        pygame.init()
+        self.monospace_font = pygame.font.SysFont("arial", 10)
+        self.py_screen = pygame.display.set_mode(dimensions)
+        self.dimensions = dimensions
+        self.__canvases = []
+
+    def add_canvas(self, canvas):
+        self.__canvases.append(canvas)
+        canvas.screen = self
+
+    @property
+    def canvases(self):
+        return self.__canvases
+
+
+class Canvas:
+    def __init__(self, camera):
+        self.screen = None
+        self.camera = camera
+        self.graphic_infos_listed = []
+        self.__graphic_infos_mapped = {}
+        self._graphics_changed_since_last_render = {}
+        self._graphics_listeners = {}
+        self.graphics_registered_listeners = []
+        self.graphics_un_registered_listeners = []
+
+    def paint_text(self, label, canvas_bounding):
+        bounding_rectangle = self.camera.transform_shape_to_screen_bounding(canvas_bounding)
+        self.screen.py_screen.blit(label, (bounding_rectangle[0], bounding_rectangle[1]))
+        return bounding_rectangle
+
+    def paint_shape(self, shape, colour, border_width):
+        py_screen = self.screen.py_screen
+        bounding_rectangle = self.camera.transform_shape_to_screen_bounding(shape)
+        # pygame.draw.ellipse(screen, colour, (50, 50, 0, 20), 1)
+        max_border_width = max(min(bounding_rectangle[2], bounding_rectangle[3]) - 1, 0)
+        border_width = min(border_width, max_border_width)
+        if type(shape) is shapes.Circle:
+            pygame.draw.ellipse(py_screen, colour, bounding_rectangle, border_width)
+        elif type(shape) is shapes.Axis:
+            axis = shape
+            screen_pos_from = self.camera.transform_point_to_screen(axis.center)
+            screen_pos_to = copy.copy(screen_pos_from)
+            screen_pos_from[axis.dimension] = 0
+            screen_pos_to[axis.dimension] = self.camera.screen_dimensions[axis.dimension]
+            pygame.draw.line(py_screen, colour, screen_pos_from, screen_pos_to, max(border_width, 1))
+        elif type(shape) is shapes.LineSegment:
+            line_segment = shape
+            start = self.camera.transform_point_to_screen(line_segment.start_point)
+            end = self.camera.transform_point_to_screen(line_segment.end_point)
+            pygame.draw.line(py_screen, colour, start, end)
+        elif type(shape) is shapes.Rectangle:
+            pygame.draw.rect(py_screen, colour, bounding_rectangle, border_width)
+        else:
+            raise "Unknown shape: " + str(type(shape))
+        return bounding_rectangle
+
+    def register_graphics(self, graphics):
+        for graphic in graphics:
+            self.register_graphic(graphic)
+
+    def register_graphic(self, graphic):
+        graphic_info = GraphicInfo(graphic, len(self.__graphic_infos_mapped))
+
+        def graphic_changed():
+            graphic_info.changed_since_render = True
+
+        graphic_info.graphics_changed_listener = graphic_changed
+        self.__graphic_infos_mapped[graphic] = graphic_info
+        graphic.add_has_changed_listener(graphic_info.graphics_changed_listener)
+        graphic_changed()
+        self.graphic_infos_listed.append(graphic_info)
+        for listener in self.graphics_registered_listeners:
+            listener(graphic_info)
+
+    def un_register_graphics(self, graphics):
+        for graphic in graphics:
+            self.un_register_graphic(graphic)
+
+    def un_register_graphic(self, graphic):
+        graphic_info = self.__graphic_infos_mapped[graphic]
+        graphic.remove_has_changed_listener(graphic_info.graphics_changed_listener)
+        del self.__graphic_infos_mapped[graphic]
+        self.graphic_infos_listed.remove(graphic_info)
+        for listener in self.graphics_un_registered_listeners:
+            listener(graphic_info)
+
+    @property
+    def graphic_infos(self):
+        return self.__graphic_infos_mapped.values()
+
+    @property
+    def graphics(self):
+        to_return = []
+        for graphic_info in self.graphic_infos:
+            to_return.append(graphic_info.graphic)
+        return to_return
 
 
 class Frame:
-    def __init__(self, frame_counter, graphic_infos, additionals, side_infos, rects_to_update, camera):
+    def __init__(self, frame_counter, canvases, additionals, side_infos, rects_to_update):
+        self.canvases = canvases
         self.rects_to_update = rects_to_update
         self.frame_counter = frame_counter
-        self.camera = camera
         self.side_infos = side_infos
         self.additionals = additionals
-        self.graphic_infos = graphic_infos
         # self.shapes_to_render = shapes_to_render
         # self.env = env
         self.rects_rendered = None
@@ -191,62 +354,28 @@ class GraphicInfo:
 
 class Renderer:
     def __init__(self):
-        self.graphic_infos_listed = []
-        self.graphic_infos = {}
-        self._graphics_changed_since_last_render = {}
-        self._graphics_listeners = {}
+        pass
 
     def render(self):
         pass
 
-    def register_graphics(self, graphics):
-        for graphic in graphics:
-            self.register_graphic(graphic)
-
-    def register_graphic(self, graphic):
-        graphic_info = GraphicInfo(graphic, len(self.graphic_infos))
-
-        def graphic_changed():
-            graphic_info.changed_since_render = True
-
-        graphic_info.graphics_changed_listener = graphic_changed
-        self.graphic_infos[graphic] = graphic_info
-        graphic.add_has_changed_listener(graphic_info.graphics_changed_listener)
-        graphic_changed()
-        self.graphic_infos_listed.append(graphic_info)
-
-    def un_register_graphics(self, graphics):
-        for graphic in graphics:
-            self.un_register_graphic(graphic)
-
-    def un_register_graphic(self, graphic):
-        graphic_info = self.graphic_infos[graphic]
-        graphic.remove_has_changed_listener(graphic_info.graphics_changed_listener)
-        del self.graphic_infos[graphic]
-        self.graphic_infos_listed.remove(graphic_info)
-
 
 class PyGameRenderer(Renderer):
     #        clock = self._environment.time[gen.RENDER_KEY]
-    def __init__(self, source_dimensions, render_dimensions=(900, 600), render_clock=None,
-                 thread_render_clock=None):
+    def __init__(self, screen, render_clock=None, thread_render_clock=None):
         super().__init__()
+        self.screen = screen
+        for canvas in self.screen.canvases:
+            canvas.graphics_un_registered_listeners.append(self.un_registered_graphic)
         self.thread_render_clock = thread_render_clock
         self.render_clock = render_clock
-        pygame.init()
-        self.screen = pygame.display.set_mode(render_dimensions)
-        self._render_dimensions = render_dimensions
-        self._render_pos = [0, 0]
         self._last_render_time = -1
         # self._last_rendered_rects = []
         self._current_frame_counter = 0
         self._last_frame = None
-        self.camera = Camera(self.screen, self._render_dimensions, self._render_pos, source_dimensions)
         self.rects_to_update = []
 
-    def un_register_graphic(self, graphic):
-        graphic_info = self.graphic_infos[graphic]
-        super(PyGameRenderer, self).un_register_graphic(graphic)
+    def un_registered_graphic(self, graphic_info):
         self.rects_to_update.append(graphic_info.last_rect_rendered)
 
     def render(self):
@@ -285,9 +414,9 @@ class PyGameRenderer(Renderer):
         # rects_to_render = []
         # for shape in shapes_to_render:
         #     rects_to_render.append(shape.to_bounding_box())
-        additional = ["width(w): " + str(self._render_dimensions[0]), "height(h): " + str(self._render_dimensions[1])
+        additional = ["width(w): " + str(self.screen.dimensions[0]), "height(h): " + str(self.screen.dimensions[1]),
                       # , "ticks: " + str(self._environment.tick_count)
-            , "frames/s: " + str(1 / (time.time() - self._last_render_time))
+                      "frames/s: " + str(1 / (time.time() - self._last_render_time))
                       # , "physics/s: " + str(1 / max(self._environment.last_tick_delta, 0.00001))
                       ]
         self._last_render_time = time.time()
@@ -299,8 +428,9 @@ class PyGameRenderer(Renderer):
             rects_previously_rendered = []
         else:
             rects_previously_rendered = self._last_frame.rects_rendered
-        frame = Frame(self._current_frame_counter, self.graphic_infos_listed, additional, side_info,
-                      self.rects_to_update, self.camera)
+
+        frame = Frame(self._current_frame_counter, self.screen.canvases, additional, side_info,
+                      self.rects_to_update)
         self.rects_to_update = []
         self._last_frame = frame
         self._current_frame_counter += 1
@@ -317,26 +447,27 @@ def render_with_pygame(frame, renderer):
     if clock is not None:
         clock.tick()
 
-    scaling = np.divide(frame.camera.render_dimensions, frame.camera.source_dimensions)
-
-    frame.camera.screen.fill((0, 0, 0))
+    renderer.screen.py_screen.fill((0, 0, 0))
     dirty_rectangles = frame.rects_to_update
     # for previous_rendered_rect in frame.rects_previously_rendered:
     #     pygame.draw.rect(frame.camera.screen, (255, 0, 0), previous_rendered_rect, 1)
-    for graphic_info in frame.graphic_infos:
-        graphic = graphic_info.graphic
-        if isinstance(graphic, ShapedGraphics):
-            shape = graphic.shape
-            if isinstance(graphic, OutlineGraphics):
-                colour = graphic.border_colour
-                border_width = 1
-            elif isinstance(graphic, MonoColouredGraphics):
-                colour = graphic.fill_colour
-                border_width = 0
-            else:
-                continue
-            drawn_bounding = draw_shape(shape, frame.camera.screen, colour, scaling,
-                                        frame.camera.render_dimensions, border_width)
+    for canvas in frame.canvases:
+        for graphic_info in canvas.graphic_infos:
+            graphic = graphic_info.graphic
+            if isinstance(graphic, ShapedGraphic):
+                shape = graphic.shape
+                if isinstance(graphic, OutlineGraphic):
+                    colour = graphic.border_colour
+                    border_width = 1
+                elif isinstance(graphic, MonoColouredGraphic):
+                    colour = graphic.fill_colour
+                    border_width = 0
+                else:
+                    continue
+                drawn_bounding = canvas.paint_shape(shape, colour, border_width)
+
+            elif isinstance(graphic, TextGraphic):
+                drawn_bounding = canvas.paint_text(graphic.label, graphic.bounding_box)
             if graphic_info.changed_since_render:
                 if graphic_info.last_rect_rendered is not None:
                     # pass
@@ -348,6 +479,7 @@ def render_with_pygame(frame, renderer):
 
                 graphic_info.last_rect_rendered = drawn_bounding
                 graphic_info.changed_since_render = False
+
 
     # frame.rects_rendered = dirty_rectangles
     # pygame.draw.circle()
@@ -365,34 +497,12 @@ def render_with_pygame(frame, renderer):
     render_lock.release()
 
 
-def transform_to_bounding(shape, scaling, render_dimensions):
-    top_left = (shape.left * scaling[0], shape.down * scaling[1])
-    shape_dimensions = (int(round(shape.width * scaling[0])),
-                        int(round(shape.height * scaling[1])))
-    rect = (top_left[0], top_left[1], shape_dimensions[0], shape_dimensions[1])
-    return rect
 
-
-def draw_shape(shape, screen, colour, scaling, render_dimensions, border_width):
-    bounding_rectangle = transform_to_bounding(shape, scaling, render_dimensions)
-    # pygame.draw.ellipse(screen, colour, (50, 50, 0, 20), 1)
-    max_border_width = max(min(bounding_rectangle[2], bounding_rectangle[3]) - 1, 0)
-    border_width = min(border_width, max_border_width)
-    if type(shape) is shapes.Circle:
-        pygame.draw.ellipse(screen, colour, bounding_rectangle, border_width)
-    elif type(shape) is shapes.Axis:
-        screen_pos_from = np.multiply(shape.center, scaling)
-        screen_pos_to = copy.copy(screen_pos_from)
-        screen_pos_to[shape.dimension] = render_dimensions[shape.dimension]
-        pygame.draw.line(screen, colour, screen_pos_from, screen_pos_to)
-    elif type(shape) is shapes.Rectangle:
-        pygame.draw.rect(screen, colour, bounding_rectangle, border_width)
-    return bounding_rectangle
 
 # class AsciiRenderer(Renderer):
-#     def __init__(self, source_dimensions, render_dimensions=(120, 20)):
-#         self.render_dimensions = render_dimensions
-#         self._source_dimensions = source_dimensions
+#     def __init__(self, canvas_dimensions, screen_dimensions=(120, 20)):
+#         self.screen_dimensions = screen_dimensions
+#         self._source_dimensions = canvas_dimensions
 #         self._render_left = 0
 #         self._render_top = 0
 #         self._last_render_time = -1

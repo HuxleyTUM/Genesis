@@ -3,19 +3,18 @@ import shapes
 
 
 class BinaryTree:
-    def __init__(self, width, height, depth):
-        self.width = width
-        self.height = height
-        self.root_node = self.divide([0, 0], [width, height], 0, depth)
+    def __init__(self, dimension, depth):
+        self.dimension = dimension
+        self.root_node = self.divide((0, 0), dimension, 0, depth)
         self.elements_to_leaves = {}
 
     def divide(self, pos, dimensions, current_depth, to_depth):
         if current_depth < to_depth:
             split_dimension = 1 if dimensions[0] > dimensions[1] else 0
             other_dimension = (split_dimension + 1) % 2
-            next_dimensions = copy.copy(dimensions)
+            next_dimensions = [dimensions[0], dimensions[1]]
             next_dimensions[other_dimension] /= 2
-            right_pos = copy.copy(pos)
+            right_pos = [pos[0], pos[1]]
             right_pos[other_dimension] += next_dimensions[other_dimension]
             left = self.divide(pos, next_dimensions, current_depth + 1, to_depth)
             right = self.divide(right_pos, next_dimensions, current_depth + 1, to_depth)

@@ -4,8 +4,7 @@ import shapes
 import copy
 import render_management
 import rendering
-import operator
-import pygame
+import event_management
 
 start_mass = 200
 mutation_model = gen.MutationModel(0.2, 0.3)
@@ -31,9 +30,11 @@ def create_number_listener(environment):
 
 def food_listener(environment):
     if environment.tick_count % 50 == 0:
-        for key, value in environment.clocks.items():
-            print(key+", "+str(value))
-            environment.clocks[key].reset()
+        print("\n--- times ---")
+        for clock in environment.clocks.clocks:
+            print(str(clock))
+            clock.reset()
+        print("\n")
     #     print("total time ticking: "+str(environment.clocks_ticking))
     #     print("time thinking: "+str(environment.clocks_thinking))
     #     print("time food consumption: "+str(environment.clocks_consumption_food))
@@ -62,7 +63,7 @@ def place_random_creature(environment):
         r_pos = gen.random_pos(width, height, creature_radius)
         name = str(r.randint(0, 1000000))
         name = "0" * (4 - len(name)) + name
-        print("Creating " + name + " at " + str(r_pos))
+        # print("Creating " + name + " at " + str(r_pos))
         body = gen.Body(start_mass, shapes.Circle(r_pos, creature_radius))
         brain = gen.Brain()
         legs = gen.Legs()
@@ -88,7 +89,7 @@ def create_master_creature():
     body = gen.Body(start_mass, shapes.Circle((0, 0), creature_radius))
     brain = gen.Brain()
     legs = gen.Legs()
-    mouth = gen.Mouth(1, 0)
+    mouth = gen.Mouth(1, 0, 10, 1)
     fission = gen.Fission(mutation_model)
     eye_left = gen.EuclideanEye(10, 40, 6)
     eye_right = gen.EuclideanEye(10, -40, 6)
@@ -101,9 +102,10 @@ def create_master_creature():
     creature.add_organ(eye_left)
     creature.add_organ(eye_right)
 
-    age_hn = brain.hidden_layer[1]
-    body.age_neuron.connect_to_neuron(age_hn, 1)
-    age_hn.connect_to_neuron(fission.fission_neuron, 1)
+    fission_hn = brain.hidden_layer[1]
+    body.age_neuron.connect_to_neuron(fission_hn, 1)
+    body.mass_neuron.connect_to_neuron(fission_hn, 1)
+    fission_hn.connect_to_neuron(fission.fission_neuron, 1)
 
     eye_left_hn = brain.hidden_layer[2]
     eye_left.vision_neuron.connect_to_neuron(eye_left_hn, 1)
@@ -131,9 +133,28 @@ def create_master_creature():
     return creature
 
 
-def start(width, height):
-    environment = gen.Environment(width, height)
-    #environment.queue_creature(create_master_creature())
+def start(dimensions):
+    screen = rendering.Screen((1280, 700))
+    side_bar_width = 400
+    environment_camera = rendering.Camera((0, 0), dimensions, (0, 0), (screen.dimensions[0]-side_bar_width, screen.dimensions[1]))
+    highlight_dimension = (side_bar_width, screen.dimensions[1])
+    highlight_camera = rendering.Camera((0, 0), highlight_dimension, (environment_camera.screen_dimensions[0], 0), highlight_dimension)
+    environment = gen.Environment(environment_camera, dimensions)
+    creature_highlight = gen.CreatureHighlight(highlight_camera)
+
+    def process_click(canvas_pos):
+        print("clicked!")
+        found_creature = False
+        for creature in environment.living_creatures:
+            if creature.body.shape.point_lies_within(canvas_pos):
+                creature_highlight.highlight(creature)
+                found_creature = True
+                print("clicked creature!")
+                break
+        if not found_creature:
+            creature_highlight.highlight(None)
+
+    environment.queue_creature(create_master_creature())
     for i in range(init_food_count):
         place_random_food(environment)
     # for i in range(min_creature_count):
@@ -141,11 +162,15 @@ def start(width, height):
 
     environment.add_tick_listener(food_listener)
     environment.add_tick_listener(create_number_listener)
-    renderer = rendering.PyGameRenderer((environment.width, environment.height),
-                                        render_clock=environment.clocks[gen.RENDER_KEY],
+
+    # environment_canvas = rendering.Canvas(environment_camera)
+    screen.add_canvas(environment)
+    screen.add_canvas(creature_highlight)
+    event_manager = event_management.EventManager(environment_camera)
+    event_manager.canvas_clicked_listeners.append(process_click)
+    renderer = rendering.PyGameRenderer(screen, render_clock=environment.clocks[gen.RENDER_KEY],
                                         thread_render_clock=environment.clocks[gen.RENDER_THREAD_KEY])
-    environment.renderer = renderer
-    manager = render_management.Manager(environment.tick, renderer.render)
+    manager = render_management.Manager(environment.tick, renderer.render, event_manager)
     manager.start()
 
-start(width, height)
+start((width, height))

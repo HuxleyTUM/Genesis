@@ -4,7 +4,8 @@ import pygame
 
 
 class Manager:
-    def __init__(self, physics, render):
+    def __init__(self, physics, render, event_manager):
+        self.event_manager = event_manager
         self._running = False
         self._physics = physics
         self._render = render
@@ -12,6 +13,7 @@ class Manager:
         self._physics_delta = 1/60
         self._last_physics_call = -1
         self._last_render_call = -1
+        event_manager.quit_listeners.append(self.quit)
 
     def start(self):
         self._running = True
@@ -19,11 +21,14 @@ class Manager:
         t.start()
         while True:
             for event in pygame.event.get():  # User did something
-                if event.type == pygame.QUIT:  # If user clicked close
-                    pygame.quit()
+                self.event_manager.process_event(event)
 
-    def stop(self):
+    def quit(self):
         self._running = False
+        pygame.quit()
+
+    # def stop(self):
+    #     self._running = False
 
     def run(self):
         while self._running:

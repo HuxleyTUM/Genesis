@@ -234,6 +234,7 @@ class Circle(Shape):
     def collides_with_rectangle(self, rectangle):
         return rectangle.collides_with_circle(self)
 
+
 class LineSegment(Shape):
     def __init__(self, start_point, end_point):
         self.__start = start_point
@@ -241,27 +242,57 @@ class LineSegment(Shape):
 
     @property
     def start_point(self):
-        return self.start_point
+        return self.__start
 
     @property
     def start_point_x(self):
-        return self.start_point[0]
+        return self.__start[0]
 
     @property
     def start_point_y(self):
-        return self.start_point[1]
+        return self.__start[1]
 
     @property
     def end_point(self):
-        return self.end_point[0], self.end_point[1]
+        return self.__end
 
     @property
     def end_point_x(self):
-        return self.end_point[0]
+        return self.__end[0]
 
     @property
     def end_point_y(self):
-        return self.end_point[1]
+        return self.__end[1]
+
+    @property
+    def center_x(self):
+        return (self.__start[0] + self.__end[0])/2
+
+    @center_x.setter
+    def center_x(self, x):
+        current_center = self.center_x
+        dx = x - current_center
+        self.__start = (self.__start[0] + dx, self.__start[1])
+        self.__end = (self.__end[0] + dx, self.__end[1])
+
+    @property
+    def center_y(self):
+        return (self.__start[1] + self.__end[1])/2
+
+    @center_y.setter
+    def center_y(self, y):
+        current_center = self.center_y
+        dy = y - current_center
+        self.__start = (self.__start[0], self.__start[1] + dy)
+        self.__end = (self.__end[0], self.__end[1] + dy)
+
+    @property
+    def width(self):
+        return abs(self.__start[0] - self.__end[0])
+
+    @property
+    def height(self):
+        return abs(self.__start[1] - self.__end[1])
 
     def to_vector(self):
         return self.width, self.height

@@ -7,7 +7,7 @@ import time
 import numpy as np
 import operator
 import binary_tree
-import clock
+from clock import *
 import rendering
 
 # G todo: add some reusable way of mutating parameters. maybe using the Beta function?
@@ -57,7 +57,90 @@ def clip(number, min_value, max_value):
     return min(max(number, min_value), max_value)
 
 
-class Environment(rendering.GraphicsSource):
+def get_dict_attr(obj, attr):
+    for obj in [obj]+obj.__class__.mro():
+        if attr in obj.__dict__:
+            return obj.__dict__[attr]
+    raise AttributeError
+
+
+class CreatureHighlight(rendering.Canvas):
+    def __init__(self, camera):
+        super().__init__(camera)
+        self.highlighted_creature = None
+
+    def highlight(self, creature):
+        if creature is not None:
+            if self.highlighted_creature is not None:
+                self.highlight(None)
+            self.highlighted_creature = creature
+            neuron_shapes = {}
+            last_y = 0
+            text = rendering.TextGraphic("Brain", self.screen.monospace_font, (700, last_y))
+            last_y += text.bounding_box.height
+            self.register_graphic(text)
+            max_vertical = last_y
+
+            neuron_index = 0
+            neuron_row_height = 30
+            neuron_label_width = 0
+            neuron_radius = 10
+            border = 10
+            for neuron in creature.brain.input_layer:
+                if neuron.label is not None:
+                    y = last_y + neuron_index * neuron_row_height
+                    label = rendering.TextGraphic(neuron.label, self.screen.monospace_font, (0, y))
+                    self.register_graphic(label)
+                    neuron_label_width = max(neuron_label_width, label.bounding_box.width)
+                neuron_index += 1
+            right_most_neuron_x = 0
+            layer_index = 0
+            for layer in creature.brain.layers:
+                x = neuron_label_width + border + layer_index * 50 + neuron_radius
+                right_most_neuron_x = max(right_most_neuron_x, x)
+                neuron_index = 0
+                for neuron in layer:
+                    y = last_y + neuron_index * 30
+                    max_vertical = max(max_vertical, y)
+                    neuron_shape = shapes.Circle((x, y), neuron_radius)
+                    neuron_shapes[neuron] = neuron_shape
+                    neuron_graphic = rendering.SimpleMonoColouredGraphic(neuron_shape, (150, 150, 150, 0))
+                    self.register_graphic(neuron_graphic)
+                    neuron_index += 1
+                    if layer_index == 0 and neuron.label is not None:
+                        self.register_graphic(rendering.TextGraphic(neuron.label, self.screen.monospace_font, (0, y)))
+                layer_index += 1
+            neuron_index = 0
+            right_label_x = right_most_neuron_x + neuron_radius + border
+            for neuron in creature.brain.output_layer:
+                if neuron.label is not None:
+                    y = last_y + neuron_index * neuron_row_height
+                    label = rendering.TextGraphic(neuron.label, self.screen.monospace_font, (right_label_x, y))
+                    self.register_graphic(label)
+                neuron_index += 1
+            layer_index = 0
+            for layer in creature.brain.layers:
+                if layer_index + 1 < len(creature.brain.layers):
+                    next_layer = creature.brain.layers[layer_index + 1]
+                    for neuron in layer:
+                        neuron_shape = neuron_shapes[neuron]
+                        for next_neuron in next_layer:
+                            if neuron.has_weight(next_neuron):
+                                next_neuron_shape = neuron_shapes[next_neuron]
+                                synapse_shape = shapes.LineSegment(neuron_shape.center, next_neuron_shape.center)
+                                c_value = int(neuron.get_weight(next_neuron) * 200)
+                                r_value = min(max(-c_value, 0), 255)
+                                g_value = min(max(c_value, 0), 255)
+                                # print("r:"+str(r_value)+", g:")
+                                synapse_graphic = rendering.SimpleOutlineGraphic(synapse_shape, (r_value, g_value, 0, 0))
+                                self.register_graphic(synapse_graphic)
+                layer_index += 1
+            last_y = max_vertical
+        else:
+            self.un_register_graphics(self.graphics)
+
+
+class Environment(rendering.Canvas):
     """This class represents the environment in which Creatures live. Not only does it manage the creatures living in
     it but also the Food which is meant to be consumed by the Creatures. The environment has no real sense of time. It
     has to be controlled from the outside via its Environment.tick() method. Whenever this method is called, the world
@@ -69,34 +152,34 @@ class Environment(rendering.GraphicsSource):
 
     Creatures in the world can not decide for themselves how they can move around. They need to make call the method
     move_creature(creature, distance_to_travel)."""
-    def __init__(self, width=1000, height=1000):
-        self.__renderer = None
+    def __init__(self, camera, dimensions=(1000, 1000)):
+        super().__init__(camera)
+        # self.__canvas = None
         self.__tick_count = 0
         self.__stage_objects = []
         self.__creatures = []
         self.__living_creatures = []
         # self.__food_pellets = set()
-        self.__food_tree = binary_tree.BinaryTree(width, height, 6)
-        self.__width = width
-        self.__height = height
+        self.__food_tree = binary_tree.BinaryTree(dimensions, 6)
+        self.__dimensions = dimensions
         self.__queued_creatures = []
         self.__tick_listeners = []
         self.__last_tick_time = -1
         self.__last_tick_delta = -1
-        self.clocks = {FOOD_COLLISION_KEY: clock.Clock(), TICK_KEY: clock.Clock(), THINKING_KEY: clock.Clock(), RENDER_KEY: clock.Clock(), FOOD_RECLASSIFICATION_KEY: clock.Clock(),
-                       RENDER_THREAD_KEY: clock.Clock()}
+        self.clocks = ClockTower([Clock(FOOD_COLLISION_KEY), Clock(TICK_KEY), Clock(THINKING_KEY), Clock(RENDER_KEY),
+                                 Clock(FOOD_RECLASSIFICATION_KEY), Clock(RENDER_THREAD_KEY)])
 
-    @property
-    def renderer(self):
-        return self.__renderer
-
-    @renderer.setter
-    def renderer(self, renderer):
-        if renderer is not None:
-            renderer.register_graphics(self.graphics)
-        elif self.__renderer is not None:
-            self.renderer.un_register_graphics(self.graphics)
-        self.__renderer = renderer
+    # @property
+    # def canvas(self):
+    #     return self.__canvas
+    #
+    # @canvas.setter
+    # def canvas(self, canvas):
+    #     if canvas is not None:
+    #         canvas.register_graphics(self.graphics)
+    #     elif self.__canvas is not None:
+    #         self.__canvas.un_register_graphics(self.graphics)
+    #     self.__canvas = canvas
 
     @property
     def graphics(self):
@@ -141,11 +224,11 @@ class Environment(rendering.GraphicsSource):
 
     @property
     def width(self):
-        return self.__width
+        return self.__dimensions[0]
 
     @property
     def height(self):
-        return self.__height
+        return self.__dimensions[1]
 
     @property
     def queued_creatures(self):
@@ -162,9 +245,18 @@ class Environment(rendering.GraphicsSource):
             self.__living_creatures.remove(creature)
         else:
             self.__queued_creatures.remove(creature)
-        if creature.environment is not None:
-            creature.environment = None
-        self.__stage_objects.remove(creature)
+        self.__remove_stage_object(creature)
+
+    def __add_stage_object(self, stage_object):
+        self.stage_objects.append(stage_object)
+        stage_object.environment = self
+        self.register_graphics(stage_object.graphics)
+
+    def __remove_stage_object(self, stage_object):
+        if stage_object.environment is not None:
+            stage_object.environment = None
+        self.__stage_objects.remove(stage_object)
+        self.un_register_graphics(stage_object.graphics)
 
     def tick(self):
         """As an Environment has no real sense of time, this method must be called periodically from the outside."""
@@ -180,8 +272,9 @@ class Environment(rendering.GraphicsSource):
             if creature.alive:
                 self.__living_creatures.append(creature)
                 self.__creatures.append(creature)
-                self.__stage_objects.append(creature)
-                creature.environment = self
+                self.__add_stage_object(creature)
+                # self.__stage_objects.append(creature)
+                # creature.environment = self
         self.__queued_creatures.clear()
         for creature in self.__living_creatures[:]:
             creature.sense()
@@ -212,7 +305,7 @@ class Environment(rendering.GraphicsSource):
         # G todo- it doesn't calculate how far the object should actually move instead!
         is_valid = True
         [width, height] = creature.body.shape.dimensions
-        if new_x+width/2 > self.__width or new_x-width/2 < 0 or new_y+height/2 > self.__height or new_y-height/2 < 0:
+        if new_x+width/2 > self.width or new_x-width/2 < 0 or new_y+height/2 > self.height or new_y-height/2 < 0:
             is_valid = False
         # if is_valid:
         #     for other_creature in self._living_creatures:
@@ -262,15 +355,12 @@ class Environment(rendering.GraphicsSource):
         """Add the specified Food to the Environment for further consumption by Creatures populating it."""
         # self.__food_pellets.add(food)
         self.food_tree.classify(food, food.shape)
-        self.__stage_objects.append(food)
-        if food.environment is None:
-            food.environment = self
+        self.__add_stage_object(food)
 
     def remove_food(self, food):
         """Removes the specified piece of Food from the Environment."""
         self.food_tree.remove(food)
-        self.__stage_objects.remove(food)
-        food.environment = None
+        self.__remove_stage_object(food)
 
 
 class StageObject:
@@ -297,16 +387,16 @@ class StageObject:
             raise Exception("Can't set environment in StageObject as long as it doesn't exist in that environment."
                             "Please call Environment.add_stage_object(stage_object) and wait for the following"
                             "Environment.tick().")
-        if environment is not None:
-            if environment.renderer is not None:
-                environment.renderer.register_graphics(self.graphics)
-        elif self.__environment is not None:
-            if self.__environment.renderer is not None:
-                self.__environment.renderer.un_register_graphics(self.graphics)
+        # if environment is not None:
+        #     if environment.canvas is not None:
+        #         environment.canvas.register_graphics(self.graphics)
+        # elif self.__environment is not None:
+        #     if self.__environment.canvas is not None:
+        #         self.__environment.canvas.un_register_graphics(self.graphics)
         self.__environment = environment
 
 
-class FoodGraphics(rendering.MonoColouredGraphics):
+class FoodGraphic(rendering.MonoColouredGraphic):
     def __init__(self, food):
         super().__init__()
         self.food = food
@@ -326,7 +416,7 @@ class Food(StageObject):
         super().__init__()
         self.__shape = shape
         self.__mass = mass
-        self.graphic = FoodGraphics(self)
+        self.graphic = FoodGraphic(self)
 
     @property
     def mass(self):
@@ -393,13 +483,13 @@ class Creature(StageObject):
         self.position_listeners = []
         self.rotation_listeners = []
 
-    def __notify_position_listeners(self, new_position):
+    def __notify_position_listeners(self, old_position, new_position):
         for position_listener in self.position_listeners:
-            position_listener(new_position)
+            position_listener(old_position, new_position)
 
-    def __notify_rotation_listeners(self, new_rotation):
+    def __notify_rotation_listeners(self, old_rotation, new_rotation):
         for rotation_listener in self.rotation_listeners:
-            rotation_listener(new_rotation)
+            rotation_listener(old_rotation, new_rotation)
 
     @property
     def alive(self):
@@ -421,8 +511,8 @@ class Creature(StageObject):
             self.remove_organ(self.__brain)
         self.add_organ(brain)
 
-    def __register_mass(self, amount):
-        if amount < self.mass_threshold:
+    def __register_mass(self, old_mass, new_mass):
+        if new_mass < self.mass_threshold:
             self.kill()
 
     @property
@@ -540,7 +630,7 @@ class Creature(StageObject):
             if random.random() < 0.5:
                 new_organ = Mouth(random_from_interval(0.1, 6), random_from_interval(-10, 10))
             else:
-                new_organ = EuclideanEye(random_from_interval(0.1, 15),
+                new_organ = EuclideanEye(random_from_interval(0.1, 30),
                                          random_from_interval(-10, 10),
                                          random_from_interval(0.1, 20))
             self.add_organ(new_organ, mutation_model)
@@ -568,11 +658,11 @@ class Creature(StageObject):
         return graphics
 
 
-class MonoColouredOrganGraphics(rendering.MonoColouredGraphics):
-    def __init__(self, organ, colour):
+class MonoColouredOrganGraphic(rendering.MonoColouredGraphic):
+    def __init__(self, shape_retriever, colour):
         super().__init__()
         self.colour = colour
-        self.organ = organ
+        self.shape_retriever = shape_retriever
 
     @property
     def fill_colour(self):
@@ -580,14 +670,14 @@ class MonoColouredOrganGraphics(rendering.MonoColouredGraphics):
 
     @property
     def shape(self):
-        return self.organ.shape
+        return self.shape_retriever()
 
 
-class OutlinedOrganGraphics(rendering.OutlineGraphics):
-    def __init__(self, organ, colour):
+class OutlinedOrganGraphic(rendering.OutlineGraphic):
+    def __init__(self, shape_retriever, colour):
         super().__init__()
         self.colour = colour
-        self.organ = organ
+        self.shape_retriever = shape_retriever
 
     @property
     def border_colour(self):
@@ -595,7 +685,7 @@ class OutlinedOrganGraphics(rendering.OutlineGraphics):
 
     @property
     def shape(self):
-        return self.organ.shape
+        return self.shape_retriever()
 
 
 class Organ:
@@ -626,6 +716,10 @@ class Organ:
 
     def __repr__(self):
         return self.__str__()
+
+    def notify_graphic_listeners_of_change(self, *args):
+        for graphic in self.graphics:
+            graphic.notify_listeners_of_change()
 
     def __add_position_listeners_to_creature(self, old_creature, new_creature):
         if new_creature is not None:
@@ -700,14 +794,14 @@ class Organ:
         """This method specifies how much mass this organ costs to maintain each tick."""
         return 0
 
-    @property
-    def shape(self):
-        """Returns the shape of this organ if it has any physical representation and None otherwise."""
-        return None
-
-    @shape.setter
-    def shape(self, shape):
-        raise Exception("Organ " + str(type(self)) + " can't have a shape!")
+    # @property
+    # def shape(self):
+    #     """Returns the shape of this organ if it has any physical representation and None otherwise."""
+    #     return None
+    #
+    # @shape.setter
+    # def shape(self, shape):
+    #     raise Exception("Organ " + str(type(self)) + " can't have a shape!")
 
     def clone(self):
         """Clones the organ and returns it. The cloned organ is not attached to any creature."""
@@ -731,6 +825,10 @@ class Neuron:
 
     def __repr__(self):
         return self.__str__()
+
+    @property
+    def label(self):
+        return self._label
 
     def connect_to_layer(self, neurons, weight=0, mutation_model=None):
         for neuron in neurons:
@@ -758,6 +856,9 @@ class Neuron:
         amount = self._activation_function(self._summed_input)
         self._summed_input = 0
         return amount
+
+    def has_weight(self, target_neuron):
+        return target_neuron in self._connections
 
     def get_weight(self, target_neuron):
         return self._connections[target_neuron]
@@ -959,9 +1060,11 @@ class Brain(Organ):
 
 class EuclideanEye(Organ):
     def __init__(self, body_distance, rotation, radius):
-        self.__graphic = OutlinedOrganGraphics(self, (150, 150, 255, 0))
-        self.graphics_listener = self.__graphic.notify_listeners_of_change
-        super().__init__("eye", self.graphics_listener, self.graphics_listener)
+        self.__field_of_view_graphic = OutlinedOrganGraphic(self.get_field_of_view_shape, (150, 150, 255, 0))
+        self.__eye_graphic = MonoColouredOrganGraphic(self.get_eye_shape, (255, 0, 0, 0))
+        self.__graphics_listener = self.notify_graphic_listeners_of_change
+        # self.graphics_listener = self.__graphic.notify_listeners_of_change
+        super().__init__("eye", self.__graphics_listener, self.__graphics_listener)
         self.body_distance = body_distance
         self.rotation = rotation
         self.radius = radius
@@ -969,8 +1072,9 @@ class EuclideanEye(Organ):
         self.register_input_neuron(self.__vision_neuron)
 
     def sense(self):
-        food = self.creature.environment.find_colliding_food(self.shape, lambda x: False)
-        self.__vision_neuron.receive_fire(len(food))
+        food = self.creature.environment.find_colliding_food(self.get_field_of_view_shape(), lambda x: False)
+        # print(str(len(food))+", "+str(sigmoid_activation(len(food))))
+        self.__vision_neuron.receive_fire(sigmoid_activation(len(food)))
 
     @property
     def vision_neuron(self):
@@ -981,8 +1085,11 @@ class EuclideanEye(Organ):
         [dx, dy] = convert_to_delta_distance(self.body_distance, self.rotation + self.creature.body.rotation)
         return [self.creature.center_x + dx, self.creature.center_y + dy]
 
-    @property
-    def shape(self):
+    def get_eye_shape(self):
+        pos = self.pos
+        return shapes.Circle(pos, 1)
+
+    def get_field_of_view_shape(self):
         pos = self.pos
         return shapes.Circle(pos, self.radius)
 
@@ -992,17 +1099,17 @@ class EuclideanEye(Organ):
 
     @property
     def tick_cost(self):
-        return self.body_distance / 100 + self.radius ** 2 / 400
+        return self.body_distance / 300 + self.radius ** 2 / 500
 
     @property
     def graphics(self):
-        return [self.__graphic]
+        return [self.__eye_graphic, self.__field_of_view_graphic]
 
 
 class Mouth(Organ):
     def __init__(self, body_distance, rotation, capacity=10., mouth_radius=2):
-        self.__graphics = MonoColouredOrganGraphics(self, (0, 255, 255, 0))
-        self.__graphics_listener = self.__graphics.notify_listeners_of_change
+        self.__graphic = MonoColouredOrganGraphic(self.get_mouth_shape, (0, 255, 255, 0))
+        self.__graphics_listener = self.__graphic.notify_listeners_of_change
         super().__init__("mouth", self.__graphics_listener, self.__graphics_listener)
         self.__body_distance = body_distance
         self.__rotation = rotation
@@ -1031,7 +1138,7 @@ class Mouth(Organ):
 
     @property
     def graphics(self):
-        return [self.__graphics]
+        return [self.__graphic]
 
     @property
     def eat_neuron(self):
@@ -1117,7 +1224,7 @@ class Mouth(Organ):
 
     @property
     def tick_cost(self):
-        return self.body_distance / 60 + self.mouth_radius ** 2 / 20 + self.food_capacity / 50
+        return self.body_distance / 100 + self.mouth_radius ** 2 / 40 + self.food_capacity / 40
         # G todo: replace with realistic tick cost -> use mouth area and not just radius!
 
     @property
@@ -1127,8 +1234,7 @@ class Mouth(Organ):
         (dx, dy) = convert_to_delta_distance(self.body_distance, self.rotation + self.creature.body.rotation)
         return self.creature.center_x + dx, self.creature.center_y + dy
 
-    @property
-    def shape(self):
+    def get_mouth_shape(self):
         pos = self.pos
         return shapes.Circle(pos, self.mouth_radius)
 
@@ -1157,7 +1263,7 @@ class Mouth(Organ):
         self.creature.mass += self.__amount_eaten
 
     def sense(self):
-        self.__has_eaten_neuron.receive_fire(self.__amount_eaten)
+        self.__has_eaten_neuron.receive_fire(sigmoid_activation(self.__amount_eaten))
 
     def consume_food(self, max_mass, foods):
         eaten = 0
@@ -1189,12 +1295,12 @@ class Mouth(Organ):
         environment = self.creature.environment
         if environment is not None:
             def f(foods): return environment.sum_mass(foods) > self.food_capacity
-            return environment.find_colliding_food(self.shape, f)
+            return environment.find_colliding_food(self.get_mouth_shape(), f)
         return None
         # print("finished finding food (" + str(r) + ")")
 
 
-class BodyGraphics(rendering.MonoColouredGraphics):
+class BodyGraphic(rendering.MonoColouredGraphic):
     def __init__(self, body):
         super().__init__()
         self.body = body
@@ -1231,16 +1337,16 @@ class Body(Organ):
         self.position_listeners = []
         self.rotation_listeners = []
         self.__mass = mass
-        self.__graphic = BodyGraphics(self)
+        self.__graphic = BodyGraphic(self)
         self.mass_listeners.append(self.__graphic.notify_listeners_of_change)
 
-    def __notify_position_listeners(self, new_position):
+    def __notify_position_listeners(self, old_position, new_position):
         for position_listener in self.position_listeners:
-            position_listener(new_position)
+            position_listener(old_position, new_position)
 
-    def __notify_rotation_listeners(self, new_rotation):
+    def __notify_rotation_listeners(self, old_rotation, new_rotation):
         for rotation_listener in self.rotation_listeners:
-            rotation_listener(new_rotation)
+            rotation_listener(old_rotation, new_rotation)
 
     @property
     def rotation(self):
@@ -1248,8 +1354,9 @@ class Body(Organ):
 
     @rotation.setter
     def rotation(self, rotation):
+        old_rotation = self.__rotation
         self.__rotation = rotation
-        self.__notify_rotation_listeners(rotation)
+        self.__notify_rotation_listeners(old_rotation, rotation)
 
     @property
     def shape(self):
@@ -1278,11 +1385,12 @@ class Body(Organ):
 
     @mass.setter
     def mass(self, amount):
+        old_mass = self.__mass
         amount = max(0, amount)
-        self.__mass = amount
         self.shape.radius = math.sqrt(amount / 2)
+        self.__mass = amount
         for mass_listener in self.mass_listeners:
-            mass_listener(self.__mass)
+            mass_listener(old_mass, amount)
 
     @property
     def center(self):
@@ -1290,8 +1398,9 @@ class Body(Organ):
 
     @center.setter
     def center(self, center):
+        old_center = self.shape.center
         self.shape.center = center
-        self.__notify_position_listeners(center)
+        self.__notify_position_listeners(old_center, center)
 
     def move(self, dx, dy):
         self.shape.translate(dx, dy)
@@ -1401,7 +1510,7 @@ class Fission(Organ):
             creature = self.creature
             environment = creature.environment
             initial_mass = creature.body.mass
-            new_mass = initial_mass * 0.6
+            new_mass = initial_mass * 0.5
             creature.body.mass = new_mass
             if creature.alive:
 
