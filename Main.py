@@ -135,27 +135,29 @@ def create_master_creature():
 
 class TaskBar(rendering.SimpleCanvas):
     def __init__(self, dimensions, render_manager, camera=rendering.RelativeCamera()):
-        super().__init__(dimensions, camera, 1, (255, 255, 255, 0), (0, 0, 0, 0))
+        super().__init__(canvas_area=shapes.Rectangle(0, 0, dimensions[0], dimensions[1]), camera=camera,
+                         border_thickness=1, border_colour=(255, 255, 255, 0), back_ground_colour=(0, 0, 0, 0))
         self.render_manager = render_manager
         padding = dimensions[1] * 0.1
         size = dimensions[1] - padding*2
-        play_rect_background = shapes.Rectangle(padding, padding, size, size)
-        play_rect_icon = shapes.Rectangle(padding + size/3, padding + size/3, size/3, size/3)
-        self.play_button_graphic_background = rendering.SimpleMonoColouredGraphic(play_rect_background, (200, 200, 200, 0))
-        self.play_button_graphic_icon = rendering.SimpleMonoColouredGraphic(play_rect_icon, (0, 255, 0, 0))
-        play_button = rendering.Button([self.play_button_graphic_background, self.play_button_graphic_icon],
-                                       play_rect_background)
-        self.register_button(play_button)
-        play_button.listeners.append(render_manager.resume)
+        play_area = shapes.Rectangle(0, 0, size, size)
+        play_icon = shapes.Polygon([(5, 0), (-5, -10), (-5, 10)])
+        # self.play_button_graphic_background = rendering.SimpleMonoColouredGraphic(play_rect_background, )
+        self.play_button_graphic_icon = rendering.SimpleMonoColouredGraphic(play_icon, (0, 255, 0, 0))
+        play_button = rendering.Button(play_area)
+        play_button.register_and_center_graphic(self.play_button_graphic_icon)
+        self.add_canvas(play_button, (padding, padding))
+        play_button.mouse_pressed_listeners.append(render_manager.resume)
 
-        pause_rect_background = shapes.Rectangle(play_rect_background.right + padding, padding, size, size)
-        pause_rect_icon = shapes.Rectangle(pause_rect_background.left + size/3, pause_rect_background.down + size/3, size/3, size/3)
-        self.pause_button_graphic_background = rendering.SimpleMonoColouredGraphic(pause_rect_background, (200, 200, 200, 0))
-        self.pause_button_graphic_icon = rendering.SimpleMonoColouredGraphic(pause_rect_icon, (100, 100, 100, 0))
-        pause_button = rendering.Button([self.pause_button_graphic_background, self.pause_button_graphic_icon],
-                                        pause_rect_background)
-        self.register_button(pause_button)
-        pause_button.listeners.append(render_manager.pause)
+        #play_rect_background.right + padding
+        pause_area = shapes.Rectangle(0, 0, size, size)
+        pause_icon = shapes.Rectangle(0, 0, size/3, size/3)
+        # self.pause_button_graphic_background = rendering.SimpleMonoColouredGraphic(pause_area, (200, 200, 200, 0))
+        pause_button_graphic_icon = rendering.SimpleMonoColouredGraphic(pause_icon, (100, 100, 100, 0))
+        pause_button = rendering.Button(pause_area, border_colour=(255, 255, 255, 0))
+        pause_button.register_and_center_graphic(pause_button_graphic_icon)
+        self.add_canvas(pause_button, (play_button.canvas_area.right+padding*2, padding))
+        pause_button.mouse_pressed_listeners.append(render_manager.pause)
 
 
 def start(environment_dimensions):
@@ -163,15 +165,10 @@ def start(environment_dimensions):
     side_bar_width = 400
     task_bar_height = 50
     environment_canvas_dimensions = (screen.dimensions[0] - side_bar_width, screen.dimensions[1] - task_bar_height)
-    # environment_camera = rendering.AbsoluteCamera((0, 0), dimensions, (0, 0), (screen.dimensions[0]-side_bar_width, screen.dimensions[1]))
     environment_camera = rendering.RelativeCamera((0, 0), (4, 4))
-    task_bar_camera = rendering.RelativeCamera()
     highlight_dimension = (side_bar_width, screen.dimensions[1])
-    highlight_camera = rendering.RelativeCamera()
     environment = gen.Environment(environment_camera, environment_canvas_dimensions, environment_dimensions)
-    creature_highlight = gen.CreatureHighlight(highlight_dimension, highlight_camera)
-
-
+    creature_highlight = gen.CreatureHighlight(highlight_dimension)
 
     environment.queue_creature(create_master_creature())
     for i in range(init_food_count):
@@ -202,7 +199,7 @@ def start(environment_dimensions):
                 break
         if not found_creature:
             creature_highlight.highlight(None)
-    environment.clicked_listeners.append(process_click)
+    environment.mouse_pressed_listeners.append(process_click)
     manager.start()
 
 start((width, height))

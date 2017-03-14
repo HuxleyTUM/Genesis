@@ -65,9 +65,9 @@ def get_dict_attr(obj, attr):
 
 
 class CreatureHighlight(rendering.SimpleCanvas):
-    def __init__(self, dimensions, camera):
-        super().__init__(dimensions, camera, border_thickness=1, border_colour=(255, 255, 255),
-                         back_ground_colour=(0, 0, 0))
+    def __init__(self, dimensions, camera=rendering.RelativeCamera()):
+        super().__init__(shapes.rect(dimensions), camera,
+                         border_thickness=1, border_colour=(255, 255, 255), back_ground_colour=(0, 0, 0))
         self.highlighted_creature = None
         self.neuron_graphics = []
 
@@ -163,8 +163,8 @@ class Environment(rendering.SimpleCanvas):
 
     Creatures in the world can not decide for themselves how they can move around. They need to make call the method
     move_creature(creature, distance_to_travel)."""
-    def __init__(self, camera, canvas_dimensions, dimensions=(1000, 1000)):
-        super().__init__(canvas_dimensions, camera)
+    def __init__(self, camera, canvas_dimensions, environment_dimensions=(1000, 1000)):
+        super().__init__(shapes.rect(canvas_dimensions), camera)
         # self.__canvas = None
         self.__canvas_dimensions = canvas_dimensions
         self.__tick_count = 0
@@ -172,8 +172,8 @@ class Environment(rendering.SimpleCanvas):
         self.__creatures = []
         self.__living_creatures = []
         # self.__food_pellets = set()
-        self.__food_tree = binary_tree.BinaryTree(dimensions, 6)
-        self.__dimensions = dimensions
+        self.__food_tree = binary_tree.BinaryTree(environment_dimensions, 6)
+        self.__dimensions = environment_dimensions
         self.__queued_creatures = []
         self.__tick_listeners = []
         self.__last_tick_time = -1

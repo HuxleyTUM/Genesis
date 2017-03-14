@@ -33,12 +33,12 @@ class Manager:
     def paused(self):
         return self._paused
 
-    def pause(self):
+    def pause(self, *args):
         if not self._paused:
             self._paused = True
             # self.pause_lock.acquire()
 
-    def resume(self):
+    def resume(self, *args):
         if self._paused:
             self._paused = False
             # self.pause_lock.release()
