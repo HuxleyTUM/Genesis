@@ -64,10 +64,12 @@ def get_dict_attr(obj, attr):
     raise AttributeError
 
 
-class CreatureHighlight(rendering.Canvas):
-    def __init__(self, camera):
-        super().__init__(camera)
+class CreatureHighlight(rendering.SimpleCanvas):
+    def __init__(self, dimensions, camera):
+        super().__init__(dimensions, camera, border_thickness=1, border_colour=(255, 255, 255),
+                         back_ground_colour=(0, 0, 0))
         self.highlighted_creature = None
+        self.neuron_graphics = []
 
     def highlight(self, creature):
         if creature is not None:
@@ -75,10 +77,11 @@ class CreatureHighlight(rendering.Canvas):
                 self.highlight(None)
             self.highlighted_creature = creature
             neuron_shapes = {}
-            last_y = 0
-            text = rendering.TextGraphic("Brain", self.screen.monospace_font, (700, last_y))
-            last_y += text.bounding_box.height
-            self.register_graphic(text)
+            padding = 5
+            last_y = padding
+            text = rendering.TextGraphic("Brain", self.arial_font(18), (padding, last_y))
+            last_y += text.bounding_rectangle.height
+            self.neuron_graphics.append(text)
             max_vertical = last_y
 
             neuron_index = 0
@@ -86,37 +89,42 @@ class CreatureHighlight(rendering.Canvas):
             neuron_label_width = 0
             neuron_radius = 10
             border = 10
+            row_y_values = []
             for neuron in creature.brain.input_layer:
                 if neuron.label is not None:
-                    y = last_y + neuron_index * neuron_row_height
-                    label = rendering.TextGraphic(neuron.label, self.screen.monospace_font, (0, y))
-                    self.register_graphic(label)
-                    neuron_label_width = max(neuron_label_width, label.bounding_box.width)
+                    y = last_y + neuron_radius + neuron_index * neuron_row_height
+                    row_y_values.append(y)
+                    label = rendering.TextGraphic(neuron.label, self.arial_font(10), (padding, y))
+                    self.neuron_graphics.append(label)
+                    neuron_label_width = max(neuron_label_width, label.bounding_rectangle.width)
                 neuron_index += 1
             right_most_neuron_x = 0
             layer_index = 0
             for layer in creature.brain.layers:
-                x = neuron_label_width + border + layer_index * 50 + neuron_radius
+                x = padding + neuron_label_width + border + layer_index * 50 + neuron_radius
                 right_most_neuron_x = max(right_most_neuron_x, x)
                 neuron_index = 0
                 for neuron in layer:
-                    y = last_y + neuron_index * 30
+                    y = row_y_values[neuron_index]
                     max_vertical = max(max_vertical, y)
                     neuron_shape = shapes.Circle((x, y), neuron_radius)
                     neuron_shapes[neuron] = neuron_shape
-                    neuron_graphic = rendering.SimpleMonoColouredGraphic(neuron_shape, (150, 150, 150, 0))
-                    self.register_graphic(neuron_graphic)
+                    neuron_colour = (150, 150, 150, 0)
+                    if neuron.is_bias:
+                        neuron_colour = (255, 0, 0, 0)
+                    neuron_graphic = rendering.SimpleMonoColouredGraphic(neuron_shape, neuron_colour)
+                    self.neuron_graphics.append(neuron_graphic)
                     neuron_index += 1
-                    if layer_index == 0 and neuron.label is not None:
-                        self.register_graphic(rendering.TextGraphic(neuron.label, self.screen.monospace_font, (0, y)))
+                    # if layer_index == 0 and neuron.label is not None:
+                    #     self.neuron_graphics.append(rendering.TextGraphic(neuron.label, self.arial_font(10), (0, y)))
                 layer_index += 1
             neuron_index = 0
             right_label_x = right_most_neuron_x + neuron_radius + border
             for neuron in creature.brain.output_layer:
                 if neuron.label is not None:
-                    y = last_y + neuron_index * neuron_row_height
-                    label = rendering.TextGraphic(neuron.label, self.screen.monospace_font, (right_label_x, y))
-                    self.register_graphic(label)
+                    y = row_y_values[neuron_index]
+                    label = rendering.TextGraphic(neuron.label, self.arial_font(10), (right_label_x, y))
+                    self.neuron_graphics.append(label)
                 neuron_index += 1
             layer_index = 0
             for layer in creature.brain.layers:
@@ -125,22 +133,25 @@ class CreatureHighlight(rendering.Canvas):
                     for neuron in layer:
                         neuron_shape = neuron_shapes[neuron]
                         for next_neuron in next_layer:
-                            if neuron.has_weight(next_neuron):
+                            if not next_neuron.is_bias and neuron.has_weight(next_neuron):
                                 next_neuron_shape = neuron_shapes[next_neuron]
                                 synapse_shape = shapes.LineSegment(neuron_shape.center, next_neuron_shape.center)
                                 c_value = int(neuron.get_weight(next_neuron) * 200)
                                 r_value = min(max(-c_value, 0), 255)
                                 g_value = min(max(c_value, 0), 255)
                                 # print("r:"+str(r_value)+", g:")
-                                synapse_graphic = rendering.SimpleOutlineGraphic(synapse_shape, (r_value, g_value, 0, 0))
-                                self.register_graphic(synapse_graphic)
+                                synapse_graphic = rendering.SimpleOutlineGraphic(synapse_shape,
+                                                                                 (r_value, g_value, 0, 0))
+                                self.neuron_graphics.append(synapse_graphic)
                 layer_index += 1
             last_y = max_vertical
+            self.register_graphics(self.neuron_graphics)
         else:
-            self.un_register_graphics(self.graphics)
+            self.un_register_graphics(self.neuron_graphics)
+            self.neuron_graphics = []
 
 
-class Environment(rendering.Canvas):
+class Environment(rendering.SimpleCanvas):
     """This class represents the environment in which Creatures live. Not only does it manage the creatures living in
     it but also the Food which is meant to be consumed by the Creatures. The environment has no real sense of time. It
     has to be controlled from the outside via its Environment.tick() method. Whenever this method is called, the world
@@ -152,9 +163,10 @@ class Environment(rendering.Canvas):
 
     Creatures in the world can not decide for themselves how they can move around. They need to make call the method
     move_creature(creature, distance_to_travel)."""
-    def __init__(self, camera, dimensions=(1000, 1000)):
-        super().__init__(camera)
+    def __init__(self, camera, canvas_dimensions, dimensions=(1000, 1000)):
+        super().__init__(canvas_dimensions, camera)
         # self.__canvas = None
+        self.__canvas_dimensions = canvas_dimensions
         self.__tick_count = 0
         self.__stage_objects = []
         self.__creatures = []
@@ -224,11 +236,11 @@ class Environment(rendering.Canvas):
 
     @property
     def width(self):
-        return self.__dimensions[0]
+        return self.__canvas_dimensions[0]
 
     @property
     def height(self):
-        return self.__dimensions[1]
+        return self.__canvas_dimensions[1]
 
     @property
     def queued_creatures(self):
@@ -674,8 +686,9 @@ class MonoColouredOrganGraphic(rendering.MonoColouredGraphic):
 
 
 class OutlinedOrganGraphic(rendering.OutlineGraphic):
-    def __init__(self, shape_retriever, colour):
+    def __init__(self, shape_retriever, colour, border_width=1):
         super().__init__()
+        self.__border_width = border_width
         self.colour = colour
         self.shape_retriever = shape_retriever
 
@@ -687,6 +700,9 @@ class OutlinedOrganGraphic(rendering.OutlineGraphic):
     def shape(self):
         return self.shape_retriever()
 
+    @property
+    def border_width(self):
+        return self.__border_width
 
 class Organ:
     """This class represents an organ which can be used by creatures. It can be added to creatures which will then
@@ -813,7 +829,8 @@ class Organ:
 
 
 class Neuron:
-    def __init__(self, activation_function, label=None):
+    def __init__(self, activation_function, label=None, is_bias=False):
+        self.is_bias = is_bias
         self._label = label
         self._connections = {}
         self._fire_listeners = []
@@ -882,18 +899,12 @@ class Brain(Organ):
         self.__hidden_layer = []
         self.__output_layer = []
         self.__layers = [self.__input_layer, self.__hidden_layer, self.__output_layer]
-
-        self.__bias_input_layer = Neuron(identity_activation, "input bias")
-        self.__bias_hidden_layer = Neuron(identity_activation, "hidden bias")
+        self.__bias_input_layer = Neuron(identity_activation, "input bias", True)
+        self.__bias_hidden_layer = Neuron(identity_activation, "hidden bias", True)
+        self.__bias_neurons = set()
 
         self.add_hidden_neuron(self.__bias_hidden_layer)
         self.add_input_neuron(self.__bias_input_layer)
-        # self.__thinking_thread = threading.Thread(target=self.__think_for_thread)
-        # self.__lock_0 = threading.Lock()
-        # self.__lock_1 = threading.Lock()
-        # print("acquire lock 0")
-        # self.__lock_0.acquire()
-        # self.__thinking_thread.start()
         self.__is_thinking = False
 
     @property
@@ -939,8 +950,9 @@ class Brain(Organ):
             to_layer_other = other_brain.layers[layer_index+1]
             for from_neuron_this, from_neuron_other in zip(from_layer_this, from_layer_other):
                 for to_neuron_this, to_neuron_other in zip(to_layer_this, to_layer_other):
-                    weight = from_neuron_other.get_weight(to_neuron_other)
-                    from_neuron_this.connect_to_neuron(to_neuron_this, weight)
+                    if not to_neuron_this.is_bias:
+                        weight = from_neuron_other.get_weight(to_neuron_other)
+                        from_neuron_this.connect_to_neuron(to_neuron_this, weight)
 
     def add_input_neuron(self, neuron, mutation_model=None):
         self.__input_layer.append(neuron)
@@ -964,7 +976,8 @@ class Brain(Organ):
         if neuron is None:
             neuron = Neuron(sigmoid_activation, "hidden " + str(len(self.__hidden_layer)))
         self.__hidden_layer.append(neuron)
-        Brain._connect_layer_to_neuron(self.__input_layer, neuron)
+        if not neuron.is_bias:
+            Brain._connect_layer_to_neuron(self.__input_layer, neuron)
         neuron.connect_to_layer(self.__output_layer)
 
     def fill_hidden_layer(self, count):
@@ -1042,13 +1055,14 @@ class Brain(Organ):
             to_layer = self.__layers[layer_index + 1]
             for neuron_from in from_layer:
                 for neuron_to in to_layer:
-                    weight = neuron_from.get_weight(neuron_to)
-                    if random.random() < likelihood:
-                        if random.random() < 0.2:
-                            weight *= -1
-                        else:
-                            weight += random_from_interval(-strength, strength)
-                    neuron_from.connect_to_neuron(neuron_to, weight)
+                    if not neuron_to.is_bias:
+                        weight = neuron_from.get_weight(neuron_to)
+                        if random.random() < likelihood:
+                            if random.random() < 0.2:
+                                weight *= -1
+                            else:
+                                weight += random_from_interval(-strength, strength)
+                        neuron_from.connect_to_neuron(neuron_to, weight)
 
     def kill(self):
         """Unlocks all locks in this organ so that the thinking thread can terminate."""

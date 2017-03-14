@@ -89,10 +89,20 @@ class Shape:
         return self.center_x + self.width/2
 
     def to_bounding_box(self):
+        return self.left, self.down, self.width, self.height
+
+    def to_int_bounding_box(self):
+        return int(self.left), int(self.down), int(self.width), int(self.height)
+
+    def to_bounding_rectangle(self):
         return Rectangle(self.left, self.down, self.width, self.height)
 
-    def translate(self, dx, dy):
-        self.center = [self.center_x() + dx, self.center_y() + dy]
+    def translate(self, delta):
+        self.center = [self.center_x + delta[0], self.center_y + delta[1]]
+
+    def scale(self, scalar):
+        self.width = self.width * scalar[0]
+        self.height = self.height * scalar[1]
 
     def point_lies_within(self, point):
         raise Exception("Not implemented!")
@@ -213,6 +223,15 @@ class Circle(Shape):
     def radius(self, radius):
         self.__radius = radius
 
+    def scale(self, scalar):
+        if scalar[0] == scalar[1]:
+            self.translate((-self.__radius, -self.__radius))
+            self.__radius *= scalar[0]
+            self.translate((self.__radius, self.__radius))
+        else:
+            print(scalar)
+            raise Exception("Not implemented!")
+
     def point_lies_within(self, point):
         distance = numpy.linalg.norm([self.__center[0] - point[0], self.__center[1] - point[1]])
         return distance < self.__radius
@@ -290,9 +309,45 @@ class LineSegment(Shape):
     def width(self):
         return abs(self.__start[0] - self.__end[0])
 
+    # @property
+    # def center(self):
+    #     return self.center_x, self.center_y
+    #
+    # @center.setter
+    # def center(self, pos):
+    #     self.center_x = pos[0]
+    #     self.center_y = pos[1]
+
     @property
     def height(self):
         return abs(self.__start[1] - self.__end[1])
+
+    # @height.setter
+    # def height(self, height):
+    #     raise Exception("Not implemented!")
+
+    @property
+    def dimensions(self):
+        return self.width, self.height
+
+    @dimensions.setter
+    def dimensions(self, dimensions):
+        x_scale = dimensions[0] / self.width if self.width > 0 else 1
+        if self.__start[0] > self.__end[0]:
+            start_x = self.__start[0] * x_scale
+            end_x = self.__end[0]
+        else:
+            end_x = self.__end[0] * x_scale
+            start_x = self.__start[0]
+        y_scale = dimensions[1] / self.height if self.height > 0 else 1
+        if self.__start[1] > self.__end[1]:
+            start_y = self.__start[1] * y_scale
+            end_y = self.__end[1]
+        else:
+            end_y = self.__end[1] * y_scale
+            start_y = self.__start[1]
+        self.__start = (start_x, start_y)
+        self.__end = (end_x, end_y)
 
     def to_vector(self):
         return self.width, self.height
@@ -312,6 +367,9 @@ class LineSegment(Shape):
         if 0 <= s <= 1 and 0 <= t <= 1:
             return self.start_point_x + (t * width), self.start_point_y + (t * height)
         return None
+
+    def scale(self, scalar):
+        self.dimensions = (self.dimensions[0] * scalar[0], self.dimensions[1] * scalar[1])
 
     def point_lies_within(self, point):
         return False
@@ -347,9 +405,26 @@ class Rectangle(Shape):
     def center_x(self):
         return self.__left + self.__width / 2
 
+    @center_x.setter
+    def center_x(self, x):
+        self.__left = x - self.__width / 2
+
     @property
     def center_y(self):
         return self.__down + self.__height / 2
+
+    @center_y.setter
+    def center_y(self, y):
+        self.__down = y - self.__height / 2
+
+    @property
+    def center(self):
+        return self.__left + self.__width / 2, self.__down + self.__height / 2
+
+    @center.setter
+    def center(self, pos):
+        self.center_x = pos[0]
+        self.center_y = pos[1]
 
     @property
     def left(self):
@@ -416,6 +491,10 @@ class Rectangle(Shape):
 
     def get_segment(self, orientation):
         return Rectangle._RECTANGLE_ORIENTATION_SEGMENT_MAPPING[orientation](self)
+
+    def scale(self, scalar):
+        self.__width *= scalar[0]
+        self.__height *= scalar[1]
 
     def point_lies_within(self, point):
         return self.__left < point[0] < self.right and self.down < point[1] < self.up

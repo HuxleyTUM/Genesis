@@ -31,19 +31,28 @@ class Graphic:
     def bounding_box(self):
         raise Exception("Not implemented!")
 
+    @property
+    def bounding_rectangle(self):
+        raise Exception("Not implemented!")
+
 
 class TextGraphic(Graphic):
     def __init__(self, text, font, position):
         super().__init__()
         (width, height) = font.size(text)
-        self.__bounding_box = shapes.Rectangle(position[0], position[1], width, height)
+        self.__bounding_rectangle = shapes.Rectangle(position[0], position[1], width, height)
         self.text = text
         self.label = font.render(text, 1, (255, 255, 255))
         # screen.blit(label, (100, 100))
 
     @property
     def bounding_box(self):
-        return self.__bounding_box
+        return (self.__bounding_rectangle.left, self.__bounding_rectangle.down,
+                self.__bounding_rectangle.width, self.__bounding_rectangle.height)
+
+    @property
+    def bounding_rectangle(self):
+        return self.__bounding_rectangle
 
 
 class ShapedGraphic(Graphic):
@@ -53,6 +62,10 @@ class ShapedGraphic(Graphic):
     @property
     def bounding_box(self):
         return self.shape.to_bounding_box()
+
+    @property
+    def bounding_rectangle(self):
+        return self.shape.to_bounding_rectangle()
 
     @property
     def shape(self):
@@ -71,6 +84,18 @@ class OutlineGraphic(ShapedGraphic):
     def border_colour(self):
         raise Exception("Not implemented!")
 
+    @border_colour.setter
+    def border_colour(self, value):
+        raise Exception("Not implemented!")
+
+    @property
+    def border_width(self):
+        raise Exception("Not implemented!")
+
+    @border_width.setter
+    def border_width(self, value):
+        raise Exception("Not implemented!")
+
     @property
     def shape(self):
         raise Exception("Not implemented!")
@@ -81,14 +106,23 @@ class OutlineGraphic(ShapedGraphic):
 
 
 class SimpleOutlineGraphic(OutlineGraphic):
-    def __init__(self, shape, border_colour):
+    def __init__(self, shape, border_colour, border_width=1):
         super().__init__()
+        self._border_width = border_width
         self._border_colour = border_colour
         self._shape = shape
 
     @property
     def border_colour(self):
         return self._border_colour
+
+    @property
+    def border_width(self):
+        return self._border_width
+
+    @border_width.setter
+    def border_width(self, value):
+        self._border_width = value
 
     @property
     def shape(self):
@@ -170,6 +204,46 @@ def listen_for_key(self):
 
 
 class Camera:
+    def transform_point_to_parent(self, point):
+        raise Exception("Not implemented!")
+
+    def transform_point_from_parent(self, point):
+        raise Exception("Not implemented!")
+
+    def transform_x_to_parent(self, point):
+        raise Exception("Not implemented!")
+
+    def transform_y_to_parent(self, point):
+        raise Exception("Not implemented!")
+
+    def transform_shape_to_parent(self, shape):
+        raise Exception("Not implemented!")
+
+
+class RelativeCamera(Camera):
+    def __init__(self, position=(0, 0), zoom=(1, 1)):
+        self.zoom = zoom
+        self.position = position
+
+    def transform_point_to_parent(self, point):
+        return self.transform_x_to_parent(point), self.transform_y_to_parent(point)
+
+    def transform_point_from_parent(self, point):
+        return point[0] / self.zoom[0] + self.position[0], point[1] / self.zoom[1] + self.position[1]
+
+    def transform_x_to_parent(self, point):
+        return (point[0] - self.position[0]) * self.zoom[0]
+
+    def transform_y_to_parent(self, point):
+        return (point[1] - self.position[1]) * self.zoom[1]
+
+    def transform_shape_to_parent(self, shape):
+        left_down = self.transform_point_to_parent((shape.left, shape.down))
+        shape.translate((left_down[0] - shape.left, left_down[1] - shape.down))
+        shape.scale(self.zoom)
+        return shape
+
+class AbsoluteCamera(Camera):
     def __init__(self, canvas_offset, canvas_dimensions, screen_offset, screen_dimensions):
         self._canvas_dimensions = canvas_dimensions
         self.canvas_offset = canvas_offset
@@ -179,11 +253,25 @@ class Camera:
 
     def __update_scaling(self):
         self.scaling = np.divide(self._screen_dimensions, self._canvas_dimensions)
-    
+
     @property
     def canvas_dimensions(self):
         return self._canvas_dimensions
-    
+
+    @property
+    def screen_bounding(self):
+        return self.screen_offset[0], self.screen_offset[1], self._screen_dimensions[0], self._screen_dimensions[1]
+
+    @property
+    def canvas_rectangle(self):
+        return shapes.Rectangle(self.canvas_offset[0], self.canvas_offset[1],
+                                self._canvas_dimensions[0], self._canvas_dimensions[1])
+
+    @property
+    def screen_rectangle(self):
+        return shapes.Rectangle(self.screen_offset[0], self.screen_offset[1],
+                                self._screen_dimensions[0], self._screen_dimensions[1])
+
     @canvas_dimensions.setter
     def canvas_dimensions(self, canvas_dimensions):
         self._canvas_dimensions = canvas_dimensions
@@ -192,93 +280,113 @@ class Camera:
     @property
     def screen_dimensions(self):
         return self._screen_dimensions
-    
+
     @screen_dimensions.setter
     def screen_dimensions(self, screen_dimensions):
         self._screen_dimensions = screen_dimensions
         self.__update_scaling()
-    
-    def transform_point_to_canvas(self, point):
+
+    def transform_point_from_parent(self, point):
         return (point[0] - self.screen_offset[0]) / self.scaling[0] + self.canvas_offset[0], \
                (point[1] - self.screen_offset[1]) / self.scaling[1] + self.canvas_offset[1]
 
-    def transform_point_to_screen(self, point):
-        return (point[0] - self.canvas_offset[0]) * self.scaling[0] + self.screen_offset[0], \
-               (point[1] - self.canvas_offset[1]) * self.scaling[1] + self.screen_offset[1]
-    
-    def transform_x_to_screen(self, x_value):
-        return x_value * self.scaling[0]
-    
-    def transform_y_to_screen(self, y_value):
-        return y_value * self.scaling[1]
+    def transform_point_to_parent(self, point):
+        return self.transform_x_to_parent(point), self.transform_y_to_parent(point)
 
-    def transform_shape_to_screen_bounding(self, shape):
-        left_down = self.transform_point_to_screen((shape.left, shape.down))
-        right_up = self.transform_point_to_screen((shape.right, shape.up))
-        shape_dimensions = (int(round(right_up[0] - left_down[0])),
-                            int(round(right_up[1] - left_down[1])))
-        rect = (left_down[0], left_down[1], shape_dimensions[0], shape_dimensions[1])
-        return rect
+    def transform_x_to_parent(self, point):
+        return (point[0] - self.canvas_offset[0]) * self.scaling[0] + self.screen_offset[0]
+
+    def transform_y_to_parent(self, point):
+        return (point[1] - self.canvas_offset[1]) * self.scaling[1] + self.screen_offset[1]
+
+    def transform_shape_to_parent(self, shape):
+        left_down = self.transform_point_to_parent((shape.left, shape.down))
+        shape.translate((left_down[0] - shape.left, left_down[1] - shape.down))
+        shape.scale(self.scaling)
+        return shape
 
 
-class Screen:
-    def __init__(self, dimensions):
-        pygame.init()
-        self.monospace_font = pygame.font.SysFont("arial", 10)
-        self.py_screen = pygame.display.set_mode(dimensions)
-        self.dimensions = dimensions
-        self.__canvases = []
+class Button:
+    def __init__(self, graphics, click_area):
+        self.click_area = click_area
+        self.graphics = graphics
+        self.listeners = []
 
-    def add_canvas(self, canvas):
-        self.__canvases.append(canvas)
-        canvas.screen = self
-
-    @property
-    def canvases(self):
-        return self.__canvases
+    def notify_listeners(self, point):
+        for listener in self.listeners:
+            listener()
 
 
 class Canvas:
-    def __init__(self, camera):
-        self.screen = None
-        self.camera = camera
+    def __init__(self, dimensions, back_ground_colour=(0, 0, 0)):
+        self.back_ground_colour = back_ground_colour
+        self.dimensions = dimensions
         self.graphic_infos_listed = []
         self.__graphic_infos_mapped = {}
         self._graphics_changed_since_last_render = {}
         self._graphics_listeners = {}
         self.graphics_registered_listeners = []
         self.graphics_un_registered_listeners = []
+        self.__canvases = []
+        self.clicked_listeners = []
+        self.buttons = []
 
-    def paint_text(self, label, canvas_bounding):
-        bounding_rectangle = self.camera.transform_shape_to_screen_bounding(canvas_bounding)
-        self.screen.py_screen.blit(label, (bounding_rectangle[0], bounding_rectangle[1]))
-        return bounding_rectangle
+    def clicked(self, point):
+        for listener in self.clicked_listeners:
+            listener(point)
 
-    def paint_shape(self, shape, colour, border_width):
-        py_screen = self.screen.py_screen
-        bounding_rectangle = self.camera.transform_shape_to_screen_bounding(shape)
-        # pygame.draw.ellipse(screen, colour, (50, 50, 0, 20), 1)
-        max_border_width = max(min(bounding_rectangle[2], bounding_rectangle[3]) - 1, 0)
-        border_width = min(border_width, max_border_width)
-        if type(shape) is shapes.Circle:
-            pygame.draw.ellipse(py_screen, colour, bounding_rectangle, border_width)
-        elif type(shape) is shapes.Axis:
-            axis = shape
-            screen_pos_from = self.camera.transform_point_to_screen(axis.center)
-            screen_pos_to = copy.copy(screen_pos_from)
-            screen_pos_from[axis.dimension] = 0
-            screen_pos_to[axis.dimension] = self.camera.screen_dimensions[axis.dimension]
-            pygame.draw.line(py_screen, colour, screen_pos_from, screen_pos_to, max(border_width, 1))
-        elif type(shape) is shapes.LineSegment:
-            line_segment = shape
-            start = self.camera.transform_point_to_screen(line_segment.start_point)
-            end = self.camera.transform_point_to_screen(line_segment.end_point)
-            pygame.draw.line(py_screen, colour, start, end)
-        elif type(shape) is shapes.Rectangle:
-            pygame.draw.rect(py_screen, colour, bounding_rectangle, border_width)
+    def register_button(self, button):
+        self.register_graphics(button.graphics)
+
+        def check_click(point):
+            if button.click_area.point_lies_within(point):
+                button.notify_listeners(point)
+        self.clicked_listeners.append(check_click)
+
+    @property
+    def local_bounding(self):
+        return shapes.Rectangle(0, 0, self.dimensions[0], self.dimensions[1])
+
+    def transform_point_from_screen(self, point):
+        if self.parent_canvas is None:
+            return point
         else:
-            raise "Unknown shape: " + str(type(shape))
-        return bounding_rectangle
+            point_from_parent = self.parent_canvas.transform_point_from_screen(point)
+            point_in_parent = (point_from_parent[0] - self.position_in_parent[0],
+                               point_from_parent[1] - self.position_in_parent[1])
+            point_in_parent = self.camera.transform_point_from_parent(point_in_parent)
+            return point_in_parent
+
+    @property
+    def parent_canvas(self):
+        return None
+
+    @parent_canvas.setter
+    def parent_canvas(self, parent_canvas):
+        raise Exception("Can't set parent canvas!")
+
+    @property
+    def position_in_parent(self):
+        return None
+
+    @position_in_parent.setter
+    def position_in_parent(self, position_in_parent):
+        raise Exception("Can't set position!")
+
+    @property
+    def camera(self):
+        return None
+
+    def paint_text(self, label, canvas_rectangle, transform_shape=False):
+        raise Exception("Not implemented!")
+
+    def paint_shape(self, shape, colour, border_width, transform_shape=False):
+        raise Exception("Not implemented!")
+
+    def add_canvas(self, canvas, position=(0, 0)):
+        canvas.parent_canvas = self
+        canvas.position_in_parent = position
+        self.__canvases.append(canvas)
 
     def register_graphics(self, graphics):
         for graphic in graphics:
@@ -312,25 +420,148 @@ class Canvas:
 
     @property
     def graphic_infos(self):
-        return self.__graphic_infos_mapped.values()
+        return self.graphic_infos_listed
 
     @property
     def graphics(self):
         to_return = []
-        for graphic_info in self.graphic_infos:
+        for graphic_info in self.graphic_infos_listed:
             to_return.append(graphic_info.graphic)
         return to_return
 
+    @property
+    def canvases(self):
+        return self.__canvases
+
+    @property
+    def monospaced_font(self):
+        raise Exception("Not implemented!")
+
+
+class SimpleCanvas(Canvas):
+    def __init__(self, dimensions, camera, border_thickness=0, border_colour=None, back_ground_colour=None):
+        super().__init__(dimensions, back_ground_colour)
+        self.border_colour = border_colour
+        self.border_thickness = border_thickness
+        self.__parent_canvas = None
+        self.__position_in_parent = None
+        self.__camera = camera
+        self.__canvas_area = shapes.Rectangle(0, 0, dimensions[0], dimensions[1])
+        if back_ground_colour is not None:
+            self.back_ground_graphics = SimpleMonoColouredGraphic(self.__canvas_area, back_ground_colour)
+            self.register_graphic(self.back_ground_graphics)
+        if border_colour is not None and border_thickness > 0:
+            self.border_graphics = SimpleOutlineGraphic(self.__canvas_area, border_colour, border_thickness)
+            self.register_graphic(self.border_graphics)
+
+    @property
+    def parent_canvas(self):
+        return self.__parent_canvas
+
+    @parent_canvas.setter
+    def parent_canvas(self, parent_canvas):
+        self.__parent_canvas = parent_canvas
+
+    @property
+    def position_in_parent(self):
+        return self.__position_in_parent
+
+    @position_in_parent.setter
+    def position_in_parent(self, position_in_parent):
+        self.__position_in_parent = position_in_parent
+
+    @property
+    def camera(self):
+        return self.__camera
+
+    def paint_text(self, label, label_bounding, transform_shape=False):
+        if not transform_shape:
+            label_bounding = copy.copy(label_bounding)
+        new_left_bottom = self.camera.transform_point_to_parent((label_bounding.left, label_bounding.down))
+        label_bounding.translate((new_left_bottom[0] - label_bounding.left, new_left_bottom[1] - label_bounding.down))
+        label_bounding.translate(self.position_in_parent)
+        return self.parent_canvas.paint_text(label, label_bounding, True)
+
+    def paint_shape(self, shape, colour, border_width, transform_shape=False):
+        if not transform_shape:
+            shape = copy.copy(shape)
+        self.camera.transform_shape_to_parent(shape)
+        if shape.left < self.__canvas_area.right and \
+                shape.right > self.__canvas_area.left and \
+                shape.down < self.__canvas_area.up and \
+                shape.up > self.__canvas_area.down:
+            shape.translate(self.position_in_parent)
+            return self.parent_canvas.paint_shape(shape, colour, border_width, True)
+        else:
+            return None
+
+    @property
+    def monospaced_font(self):
+        return self.parent_canvas.monospaced_font
+
+    def arial_font(self, size):
+        return self.parent_canvas.arial_font(size)
+
+
+class Screen(Canvas):
+    def __init__(self, dimensions):
+        super().__init__(dimensions)
+        pygame.init()
+        self._monospaced_font = pygame.font.SysFont("monospaced", 10)
+        self._arial_fonts = {}
+        self.py_screen = pygame.display.set_mode(dimensions)
+        self.dimensions = dimensions
+        self._static_camera = Camera()
+
+    def paint_text(self, label, bounding_rectangle, transform_shape=False):
+        self.py_screen.blit(label, (bounding_rectangle.left, bounding_rectangle.down))
+        return bounding_rectangle.to_bounding_box()
+
+    def paint_shape(self, shape, colour, border_width, transform_shape=False):
+        bounding_box = shape.to_int_bounding_box()
+        # pygame.draw.ellipse(screen, colour, (50, 50, 0, 20), 1)
+        max_border_width = max(min(bounding_box[2], bounding_box[3]) - 1, 0)
+        # try:
+        border_width = min(border_width, max_border_width)
+        # except TypeError:
+        #     print("type: "+str(type(shape)))
+        if type(shape) is shapes.Circle:
+            pygame.draw.ellipse(self.py_screen, colour, bounding_box, border_width)
+        elif type(shape) is shapes.Axis:
+            axis = shape
+            screen_pos_from = axis.center
+            screen_pos_to = copy.copy(screen_pos_from)
+            screen_pos_from[axis.dimension] = 0
+            screen_pos_to[axis.dimension] = self.dimensions[axis.dimension]
+            pygame.draw.line(self.py_screen, colour, screen_pos_from, screen_pos_to, max(border_width, 1))
+        elif type(shape) is shapes.LineSegment:
+            line_segment = shape
+            pygame.draw.line(self.py_screen, colour, line_segment.start_point, line_segment.end_point)
+        elif type(shape) is shapes.Rectangle:
+            pygame.draw.rect(self.py_screen, colour, bounding_box, border_width)
+        else:
+            raise "Unknown shape: " + str(type(shape))
+        return bounding_box
+
+    @property
+    def camera(self):
+        return self._static_camera
+
+    @property
+    def monospaced_font(self):
+        return self._monospaced_font
+
+    def arial_font(self, size):
+        if size not in self._arial_fonts:
+            self._arial_fonts[size] = pygame.font.SysFont("arial", size)
+        return self._arial_fonts[size]
+
 
 class Frame:
-    def __init__(self, frame_counter, canvases, additionals, side_infos, rects_to_update):
+    def __init__(self, frame_counter, canvases, rects_to_update):
         self.canvases = canvases
         self.rects_to_update = rects_to_update
         self.frame_counter = frame_counter
-        self.side_infos = side_infos
-        self.additionals = additionals
-        # self.shapes_to_render = shapes_to_render
-        # self.env = env
         self.rects_rendered = None
 
 
@@ -429,8 +660,7 @@ class PyGameRenderer(Renderer):
         else:
             rects_previously_rendered = self._last_frame.rects_rendered
 
-        frame = Frame(self._current_frame_counter, self.screen.canvases, additional, side_info,
-                      self.rects_to_update)
+        frame = Frame(self._current_frame_counter, self.screen.canvases, self.rects_to_update)
         self.rects_to_update = []
         self._last_frame = frame
         self._current_frame_counter += 1
@@ -452,13 +682,18 @@ def render_with_pygame(frame, renderer):
     # for previous_rendered_rect in frame.rects_previously_rendered:
     #     pygame.draw.rect(frame.camera.screen, (255, 0, 0), previous_rendered_rect, 1)
     for canvas in frame.canvases:
-        for graphic_info in canvas.graphic_infos:
+        # pygame.draw.rect(canvas.screen.py_screen, canvas.back_ground_colour, canvas.camera.screen_bounding, 0)
+        # if canvas.border_thickness > 0:
+        #     pygame.draw.rect(canvas.screen.py_screen, canvas.border_colour,
+        #                      canvas.camera.screen_bounding, canvas.border_thickness)
+        
+        for graphic_info in list(canvas.graphic_infos):
             graphic = graphic_info.graphic
             if isinstance(graphic, ShapedGraphic):
                 shape = graphic.shape
                 if isinstance(graphic, OutlineGraphic):
                     colour = graphic.border_colour
-                    border_width = 1
+                    border_width = graphic.border_width
                 elif isinstance(graphic, MonoColouredGraphic):
                     colour = graphic.fill_colour
                     border_width = 0
@@ -467,8 +702,9 @@ def render_with_pygame(frame, renderer):
                 drawn_bounding = canvas.paint_shape(shape, colour, border_width)
 
             elif isinstance(graphic, TextGraphic):
-                drawn_bounding = canvas.paint_text(graphic.label, graphic.bounding_box)
-            if graphic_info.changed_since_render:
+                drawn_bounding = canvas.paint_text(graphic.label, graphic.bounding_rectangle)
+
+            if drawn_bounding is not None and graphic_info.changed_since_render:
                 if graphic_info.last_rect_rendered is not None:
                     # pass
                     dirty_rectangles.append(graphic_info.last_rect_rendered)

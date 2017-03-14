@@ -14,6 +14,8 @@ class Manager:
         self._last_physics_call = -1
         self._last_render_call = -1
         event_manager.quit_listeners.append(self.quit)
+        # self.pause_lock = threading.Lock()
+        self._paused = False
 
     def start(self):
         self._running = True
@@ -27,26 +29,34 @@ class Manager:
         self._running = False
         pygame.quit()
 
-    # def stop(self):
-    #     self._running = False
+    @property
+    def paused(self):
+        return self._paused
+
+    def pause(self):
+        if not self._paused:
+            self._paused = True
+            # self.pause_lock.acquire()
+
+    def resume(self):
+        if self._paused:
+            self._paused = False
+            # self.pause_lock.release()
 
     def run(self):
         while self._running:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self._running = False
-                    pygame.quit()
-                    # sys.exit()
+            # self.pause_lock.acquire()
+            # self.pause_lock.release()
             current_time = time.time()
             time_to_next_physics_call = (self._last_physics_call + self._physics_delta) - current_time
             time_to_next_render_call = (self._last_render_call + self._render_delta) - current_time
+            time_to_next_call = min(time_to_next_physics_call, time_to_next_render_call)
+            if time_to_next_call > 0:
+                time.sleep(time_to_next_call)
             if time_to_next_physics_call < time_to_next_render_call:
-                if time_to_next_physics_call > 0:
-                    time.sleep(time_to_next_physics_call)
                 self._last_physics_call = time.time()
-                self._physics()
+                if not self.paused:
+                    self._physics()
             else:
-                if time_to_next_render_call > 0:
-                    time.sleep(time_to_next_render_call)
                 self._last_render_call = time.time()
                 self._render()

@@ -133,26 +133,45 @@ def create_master_creature():
     return creature
 
 
-def start(dimensions):
+class TaskBar(rendering.SimpleCanvas):
+    def __init__(self, dimensions, render_manager, camera=rendering.RelativeCamera()):
+        super().__init__(dimensions, camera, 1, (255, 255, 255, 0), (0, 0, 0, 0))
+        self.render_manager = render_manager
+        padding = dimensions[1] * 0.1
+        size = dimensions[1] - padding*2
+        play_rect_background = shapes.Rectangle(padding, padding, size, size)
+        play_rect_icon = shapes.Rectangle(padding + size/3, padding + size/3, size/3, size/3)
+        self.play_button_graphic_background = rendering.SimpleMonoColouredGraphic(play_rect_background, (200, 200, 200, 0))
+        self.play_button_graphic_icon = rendering.SimpleMonoColouredGraphic(play_rect_icon, (0, 255, 0, 0))
+        play_button = rendering.Button([self.play_button_graphic_background, self.play_button_graphic_icon],
+                                       play_rect_background)
+        self.register_button(play_button)
+        play_button.listeners.append(render_manager.resume)
+
+        pause_rect_background = shapes.Rectangle(play_rect_background.right + padding, padding, size, size)
+        pause_rect_icon = shapes.Rectangle(pause_rect_background.left + size/3, pause_rect_background.down + size/3, size/3, size/3)
+        self.pause_button_graphic_background = rendering.SimpleMonoColouredGraphic(pause_rect_background, (200, 200, 200, 0))
+        self.pause_button_graphic_icon = rendering.SimpleMonoColouredGraphic(pause_rect_icon, (100, 100, 100, 0))
+        pause_button = rendering.Button([self.pause_button_graphic_background, self.pause_button_graphic_icon],
+                                        pause_rect_background)
+        self.register_button(pause_button)
+        pause_button.listeners.append(render_manager.pause)
+
+
+def start(environment_dimensions):
     screen = rendering.Screen((1280, 700))
     side_bar_width = 400
-    environment_camera = rendering.Camera((0, 0), dimensions, (0, 0), (screen.dimensions[0]-side_bar_width, screen.dimensions[1]))
+    task_bar_height = 50
+    environment_canvas_dimensions = (screen.dimensions[0] - side_bar_width, screen.dimensions[1] - task_bar_height)
+    # environment_camera = rendering.AbsoluteCamera((0, 0), dimensions, (0, 0), (screen.dimensions[0]-side_bar_width, screen.dimensions[1]))
+    environment_camera = rendering.RelativeCamera((0, 0), (4, 4))
+    task_bar_camera = rendering.RelativeCamera()
     highlight_dimension = (side_bar_width, screen.dimensions[1])
-    highlight_camera = rendering.Camera((0, 0), highlight_dimension, (environment_camera.screen_dimensions[0], 0), highlight_dimension)
-    environment = gen.Environment(environment_camera, dimensions)
-    creature_highlight = gen.CreatureHighlight(highlight_camera)
+    highlight_camera = rendering.RelativeCamera()
+    environment = gen.Environment(environment_camera, environment_canvas_dimensions, environment_dimensions)
+    creature_highlight = gen.CreatureHighlight(highlight_dimension, highlight_camera)
 
-    def process_click(canvas_pos):
-        print("clicked!")
-        found_creature = False
-        for creature in environment.living_creatures:
-            if creature.body.shape.point_lies_within(canvas_pos):
-                creature_highlight.highlight(creature)
-                found_creature = True
-                print("clicked creature!")
-                break
-        if not found_creature:
-            creature_highlight.highlight(None)
+
 
     environment.queue_creature(create_master_creature())
     for i in range(init_food_count):
@@ -164,13 +183,26 @@ def start(dimensions):
     environment.add_tick_listener(create_number_listener)
 
     # environment_canvas = rendering.Canvas(environment_camera)
-    screen.add_canvas(environment)
-    screen.add_canvas(creature_highlight)
-    event_manager = event_management.EventManager(environment_camera)
-    event_manager.canvas_clicked_listeners.append(process_click)
+    screen.add_canvas(environment, (0, task_bar_height))
+    screen.add_canvas(creature_highlight, (environment_canvas_dimensions[0], 0))
+    event_manager = event_management.EventManager(screen)
+
     renderer = rendering.PyGameRenderer(screen, render_clock=environment.clocks[gen.RENDER_KEY],
                                         thread_render_clock=environment.clocks[gen.RENDER_THREAD_KEY])
     manager = render_management.Manager(environment.tick, renderer.render, event_manager)
+    task_bar = TaskBar((environment_canvas_dimensions[0], task_bar_height), manager)
+    screen.add_canvas(task_bar)
+
+    def process_click(canvas_pos):
+        found_creature = False
+        for creature in environment.living_creatures:
+            if creature.body.shape.point_lies_within(canvas_pos):
+                creature_highlight.highlight(creature)
+                found_creature = True
+                break
+        if not found_creature:
+            creature_highlight.highlight(None)
+    environment.clicked_listeners.append(process_click)
     manager.start()
 
 start((width, height))
