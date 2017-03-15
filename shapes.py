@@ -88,6 +88,9 @@ class Shape:
     def up(self):
         return self.center_y + self.height/2
 
+    def has_area(self):
+        raise Exception("Not implemented!")
+
     def to_bounding_box(self):
         return self.left, self.down, self.width, self.height
 
@@ -131,6 +134,9 @@ class Axis(Shape):
     def __init__(self, offset, dimension):
         self.offset = offset
         self.dimension = dimension
+
+    def has_area(self):
+        return False
 
     @property
     def other_dimension(self):
@@ -178,6 +184,9 @@ class Circle(Shape):
     def __init__(self, center, radius):
         self.__center = center
         self.__radius = radius
+
+    def has_area(self):
+        return True
 
     @property
     def center_x(self):
@@ -258,6 +267,9 @@ class LineSegment(Shape):
     def __init__(self, start_point, end_point):
         self.__start = start_point
         self.__end = end_point
+
+    def has_area(self):
+        return False
 
     @property
     def start_point(self):
@@ -405,6 +417,9 @@ class Rectangle(Shape):
         self.__width = width
         self.__height = height
 
+    def has_area(self):
+        return True
+
     @property
     def center_x(self):
         return self.__left + self.__width / 2
@@ -544,6 +559,9 @@ class Polygon(Shape):
         self.__width = 0
         self.__height = 0
         self.__recalc_values()
+
+    def has_area(self):
+        return True
 
     def __recalc_values(self):
         min_x = 0

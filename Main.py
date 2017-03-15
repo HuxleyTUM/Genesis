@@ -5,6 +5,7 @@ import copy
 import render_management
 import rendering
 import event_management
+import functools
 
 start_mass = 200
 mutation_model = gen.MutationModel(0.2, 0.3)
@@ -133,37 +134,75 @@ def create_master_creature():
     return creature
 
 
-class TaskBar(rendering.SimpleCanvas):
-    def __init__(self, dimensions, render_manager, camera=rendering.RelativeCamera()):
-        super().__init__(canvas_area=shapes.Rectangle(0, 0, dimensions[0], dimensions[1]), camera=camera,
-                         border_thickness=1, border_colour=(255, 255, 255, 0), back_ground_colour=(0, 0, 0, 0))
-        self.render_manager = render_manager
-        padding = dimensions[1] * 0.1
-        size = dimensions[1] - padding*2
-        play_area = shapes.Rectangle(0, 0, size, size)
-        play_icon = shapes.Polygon([(5, 0), (-5, -10), (-5, 10)])
-        # self.play_button_graphic_background = rendering.SimpleMonoColouredGraphic(play_rect_background, )
-        self.play_button_graphic_icon = rendering.SimpleMonoColouredGraphic(play_icon, (0, 255, 0, 0))
-        play_button = rendering.Button(play_area)
-        play_button.register_and_center_graphic(self.play_button_graphic_icon)
-        self.add_canvas(play_button, (padding, padding))
-        play_button.mouse_pressed_listeners.append(render_manager.resume)
+def create_play_button():
+    button_area = shapes.Rectangle(0, 0, 30, 30)
+    button_icon = shapes.Polygon([(6, 0), (-6, -10), (-6, 10)])
+    # self.button_graphic_background = rendering.SimpleMonoColouredGraphic(button_rect_background, )
+    button_graphic_icon = rendering.SimpleMonoColouredGraphic(button_icon, (0, 255, 0, 0))
+    button = rendering.Button(button_area)
+    button.register_and_center_graphic(button_graphic_icon)
+    return button
 
+
+def create_pause_button():
+    button_area = shapes.Rectangle(0, 0, 30, 30)
+    button = rendering.Button(button_area)
+    for x in (-4, 4):
+        button_icon_left = shapes.Rectangle(0, 0, 6, 20)
+        button_graphic_icon = rendering.SimpleMonoColouredGraphic(button_icon_left, (100, 100, 100, 0))
+        button.register_and_center_graphic(button_graphic_icon)
+        button_graphic_icon.translate((x, 0))
+    return button
+
+
+def create_visualise_bounding_button():
+    button_area = shapes.Rectangle(0, 0, 30, 30)
+    button = rendering.Button(button_area)
+    icon_shapes = [shapes.Circle((8, 10), 7), shapes.LineSegment((5, 28), (28, 18))]
+    for shape in icon_shapes:
+        if shape.has_area():
+            shape_graphic = rendering.SimpleMonoColouredGraphic(shape, (0, 0, 255))
+        else:
+            shape_graphic = rendering.SimpleOutlineGraphic(shape, (0, 0, 255))
+        button.register_graphic(shape_graphic)
+        button.register_graphic(rendering.SimpleOutlineGraphic(shape.to_bounding_rectangle(), (255, 0, 0)))
+
+    return button
+
+
+def create_task_bar(dimensions, render_manager, renderer):
+    task_bar = rendering.ButtonBar(dimensions)
+    play_button = create_play_button()
+    task_bar.add_button(play_button)
+    play_button.mouse_pressed_listeners.append(render_manager.resume)
+
+    pause_button = create_pause_button()    
+    task_bar.add_button(pause_button)
+    pause_button.mouse_pressed_listeners.append(render_manager.pause)
+
+    visualise_bounding_button = create_visualise_bounding_button()
+    task_bar.add_button(visualise_bounding_button)
+    visualise_bounding_button.mouse_pressed_listeners.append(renderer.visualise_boundings)
+    return task_bar
+
+
+# class TaskBar(rendering.SimpleCanvas):
+#     def __init__(self, dimensions, render_manager, camera=rendering.RelativeCamera()):
+#         super().__init__(canvas_area=shapes.Rectangle(0, 0, dimensions[0], dimensions[1]), camera=camera,
+#                          border_thickness=1, border_colour=(255, 255, 255, 0), back_ground_colour=(0, 0, 0, 0))
+#         self.render_manager = render_manager
+#         padding = dimensions[1] * 0.1
+#         size = dimensions[1] - padding*2
+#
+#
         #play_rect_background.right + padding
-        pause_area = shapes.Rectangle(0, 0, size, size)
-        pause_icon = shapes.Rectangle(0, 0, size/3, size/3)
-        # self.pause_button_graphic_background = rendering.SimpleMonoColouredGraphic(pause_area, (200, 200, 200, 0))
-        pause_button_graphic_icon = rendering.SimpleMonoColouredGraphic(pause_icon, (100, 100, 100, 0))
-        pause_button = rendering.Button(pause_area, border_colour=(255, 255, 255, 0))
-        pause_button.register_and_center_graphic(pause_button_graphic_icon)
-        self.add_canvas(pause_button, (play_button.canvas_area.right+padding*2, padding))
-        pause_button.mouse_pressed_listeners.append(render_manager.pause)
+
 
 
 def start(environment_dimensions):
     screen = rendering.Screen((1280, 700))
     side_bar_width = 400
-    task_bar_height = 50
+    task_bar_height = 40
     environment_canvas_dimensions = (screen.dimensions[0] - side_bar_width, screen.dimensions[1] - task_bar_height)
     environment_camera = rendering.RelativeCamera((0, 0), (4, 4))
     highlight_dimension = (side_bar_width, screen.dimensions[1])
@@ -176,8 +215,8 @@ def start(environment_dimensions):
     # for i in range(min_creature_count):
     #     place_random_creature(environment)
 
-    environment.add_tick_listener(food_listener)
-    environment.add_tick_listener(create_number_listener)
+    environment.add_tick_listener(functools.partial(food_listener, environment))
+    environment.add_tick_listener(functools.partial(create_number_listener, environment))
 
     # environment_canvas = rendering.Canvas(environment_camera)
     screen.add_canvas(environment, (0, task_bar_height))
@@ -187,7 +226,7 @@ def start(environment_dimensions):
     renderer = rendering.PyGameRenderer(screen, render_clock=environment.clocks[gen.RENDER_KEY],
                                         thread_render_clock=environment.clocks[gen.RENDER_THREAD_KEY])
     manager = render_management.Manager(environment.tick, renderer.render, event_manager)
-    task_bar = TaskBar((environment_canvas_dimensions[0], task_bar_height), manager)
+    task_bar = create_task_bar((environment_canvas_dimensions[0], task_bar_height), manager, renderer)
     screen.add_canvas(task_bar)
 
     def process_click(canvas_pos):

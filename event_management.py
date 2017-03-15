@@ -12,23 +12,19 @@ class EventManager:
         if event.type == pygame.QUIT:  # If user clicked close
             for listener in self.quit_listeners:
                 listener()
-        elif event.type == pygame.MOUSEBUTTONDOWN:
+        else:
             screen_pos = pygame.mouse.get_pos()
-            (active_canvas, local_point) = self.find_canvas(screen_pos, screen_pos, self.screen)
-            print("clicked in "+str(type(active_canvas)))
-            for listener in self.screen_clicked_listeners:
-                listener(screen_pos)
-            active_canvas.mouse_pressed(local_point)
-            self.mouse_released_canvas = active_canvas
-        elif event.type == pygame.MOUSEBUTTONUP:
-            screen_pos = pygame.mouse.get_pos()
-            canvas_local_point = self.mouse_released_canvas.transform_point_from_screen(screen_pos)
-            self.mouse_released_canvas.mouse_released(canvas_local_point)
-            # if len(self.canvas_clicked_listeners) > 0:
-            #     canvas_pos = self.camera.transform_point_from_parent(screen_pos)
-            #     for listener in self.canvas_clicked_listeners:
-            #         listener(canvas_pos)
-    
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                (active_canvas, local_point) = self.find_canvas(screen_pos, screen_pos, self.screen)
+                print("clicked in "+str(type(active_canvas)))
+                for listener in self.screen_clicked_listeners:
+                    listener(screen_pos)
+                active_canvas.mouse_pressed(local_point)
+                self.mouse_released_canvas = active_canvas
+            elif event.type == pygame.MOUSEBUTTONUP:
+                canvas_local_point = self.mouse_released_canvas.transform_point_from_screen(screen_pos)
+                self.mouse_released_canvas.mouse_released(canvas_local_point)
+
     def find_canvas(self, screen_point, local_point, parent_canvas):
         for canvas in reversed(parent_canvas.canvases):
             canvas_local_point = canvas.transform_point_from_screen(screen_point)

@@ -10,7 +10,7 @@ class Manager:
         self._physics = physics
         self._render = render
         self._render_delta = 1/30
-        self._physics_delta = 1/60
+        self._physics_delta = 1/30
         self._last_physics_call = -1
         self._last_render_call = -1
         event_manager.quit_listeners.append(self.quit)

@@ -64,91 +64,273 @@ def get_dict_attr(obj, attr):
     raise AttributeError
 
 
+class OrganHighlight(rendering.SimpleCanvas):
+    def __init__(self, dimensions, header_text, organ_count, header_size=18, padding=5, camera=rendering.RelativeCamera()):
+        super().__init__(shapes.rect(dimensions), camera, border_colour=(0, 255, 0, 0))
+        self.header_text = header_text
+        self.organ_graphics = []
+        self.highlighted_organ = None
+        self.padding = padding
+        self.last_y = padding
+        if organ_count > 0:
+            header_text += " "+str(organ_count)
+        self.label = rendering.TextGraphic(header_text, rendering.Fonts.arial_font(header_size),
+                                           (padding, self.last_y))
+        self.last_y += self.label.bounding_rectangle.height
+
+    def _set_final_height(self, height):
+        self.canvas_area.scale((1, height / self.canvas_area.height))
+
+    def highlight(self, organ):
+        if organ is not None:
+            if self.highlighted_organ is not None:
+                self.highlight(None)
+            self.register_graphic(self.label)
+            self.highlighted_organ = organ
+            self.visualize(organ)
+            max_y = 0
+            for graphic in self.organ_graphics:
+                max_y = max(max_y, graphic.bounding_rectangle.down, graphic.bounding_rectangle.up)
+                self.register_graphic(graphic)
+            self._set_final_height(max_y)
+        else:
+            self.un_register_graphic(self.label)
+            self.un_register_graphics(self.organ_graphics)
+            self.organ_graphics = []
+
+    def add_text(self, text, x_value=None, y_value=None):
+        if x_value is None:
+            x_value = self.padding
+        update_last_y = y_value is None
+        if update_last_y:
+            y_value = self.last_y
+        label = rendering.TextGraphic(text, rendering.Fonts.arial_font(10), (x_value, y_value))
+        self.organ_graphics.append(label)
+        if update_last_y:
+            self.last_y += label.bounding_rectangle.height
+        return label
+
+    def print_grid_text(self, grid_text):
+        grid = []
+        last_column_max_x = 0
+        max_x = 0
+        initial_y = self.last_y
+        for column in grid_text:
+            column_labels = []
+            grid.append(column_labels)
+            last_column_max_x += self.padding
+            self.last_y = initial_y
+            for word in column:
+                text = self.add_text(str(word), last_column_max_x)
+                column_labels.append(text)
+                max_x = max(max_x, text.bounding_rectangle.right)
+            last_column_max_x = max_x
+        return grid
+
+    def visualize(self, organ):
+        pass
+
+    def refresh_values(self):
+        pass
+
+
+class MouthHighlight(OrganHighlight):
+    def __init__(self, dimensions, organ_count, camera=rendering.RelativeCamera()):
+        super().__init__(dimensions, "Mouth", organ_count, camera=camera)
+        self.grid = None
+
+    def visualize(self, mouth):
+        labels = ["body distance", "rotation", "mouth_radius", "food capacity", "total amount eaten"]
+        values = [mouth.body_distance, mouth.rotation, mouth.mouth_radius, mouth.food_capacity, 0]
+        self.grid = self.print_grid_text((labels, values))
+        self._set_final_height(self.last_y)
+
+    def refresh_values(self):
+        self.grid[1][4].text = str(self.highlighted_organ.total_amount_eaten)
+        # print(self.highlighted_organ.amount_eaten)
+
+
+class FissionHighlight(OrganHighlight):
+    def __init__(self, dimensions, organ_count, camera=rendering.RelativeCamera()):
+        super().__init__(dimensions, "Fission", organ_count, camera=camera)
+        self.grid = None
+
+    def visualize(self, fission):
+        labels = ["offsprings produced"]
+        values = [fission.offsprings_produced]
+        self.grid = self.print_grid_text((labels, values))
+        self._set_final_height(self.last_y)
+
+    def refresh_values(self):
+        self.grid[1][0].text = str(self.highlighted_organ.offsprings_produced)
+        # print(self.highlighted_organ.amount_eaten)
+
+
+class BodyHighlight(OrganHighlight):
+    def __init__(self, dimensions, organ_count, camera=rendering.RelativeCamera()):
+        super().__init__(dimensions, "Body", organ_count, camera=camera)
+        self.grid = None
+
+    # self._initial_mass = mass
+    # self.__shape = shape
+    # self._max_mass_burn = max_mass_burn
+    #
+    # self.__rotation = angle
+    def visualize(self, body):
+        labels = ["mass", "age", "rotation", "position"]
+        values = [body.mass, body.age, body.rotation, body.center]
+        self.grid = self.print_grid_text((labels, values))
+        self._set_final_height(self.last_y)
+
+    def refresh_values(self):
+        pass
+        self.grid[1][0].text = str(self.highlighted_organ.mass)
+        self.grid[1][1].text = str(self.highlighted_organ.age)
+        self.grid[1][2].text = str(self.highlighted_organ.rotation)
+        self.grid[1][3].text = str(self.highlighted_organ.center)
+        # print(self.highlighted_organ.amount_eaten)
+
+
+class EyeHighlight(OrganHighlight):
+    def __init__(self, dimensions, organ_count, camera=rendering.RelativeCamera()):
+        super().__init__(dimensions, "Eye", organ_count, camera=camera)
+        self.grid = None
+
+    def visualize(self, eye):
+        labels = ["body distance", "rotation", "radius", "food_spotted"]
+        values = [eye.body_distance,  eye.rotation, eye.radius, eye.food_pellets_spotted_count]
+        self.grid = self.print_grid_text((labels, values))
+        self._set_final_height(self.last_y)
+
+    def refresh_values(self):
+        self.grid[1][3].text = str(self.highlighted_organ.food_pellets_spotted_count)
+
+
+class BrainHighlight(OrganHighlight):
+    def __init__(self, dimensions, organ_count, camera=rendering.RelativeCamera()):
+        super().__init__(dimensions, "Brain", organ_count, camera=camera)
+
+    def visualize(self, brain):
+        neuron_shapes = {}
+
+        max_vertical = self.last_y
+
+        neuron_row_height = 30
+        neuron_label_width = 0
+        neuron_radius = 10
+        border = 10
+        column_width = 50
+        text_offset = 6
+        row_y_values = []
+        for row_index in range(max(len(brain.input_layer),
+                                   len(brain.hidden_layer),
+                                   len(brain.output_layer))):
+            y = self.last_y + neuron_radius + row_index * neuron_row_height
+            row_y_values.append(y)
+        for neuron, neuron_index in zip(brain.input_layer, range(len(brain.input_layer))):
+            y = row_y_values[neuron_index]
+            if neuron.label is not None:
+                text = self.add_text(neuron.label, y_value=y - text_offset)
+                neuron_label_width = max(neuron_label_width, text.bounding_rectangle.width)
+        right_most_neuron_x = 0
+        for layer, layer_index in zip(brain.layers, range(len(brain.layers))):
+            x = self.padding + neuron_label_width + border + layer_index * column_width + neuron_radius
+            right_most_neuron_x = max(right_most_neuron_x, x)
+            neuron_index = 0
+            for neuron in layer:
+                y = row_y_values[neuron_index]
+                max_vertical = max(max_vertical, y)
+                neuron_shape = shapes.Circle((x, y), neuron_radius)
+                neuron_shapes[neuron] = neuron_shape
+                neuron_colour = (150, 150, 150, 0)
+                if neuron.is_bias:
+                    neuron_colour = (50, 50, 50, 0)
+                neuron_graphic = rendering.SimpleMonoColouredGraphic(neuron_shape, neuron_colour)
+                self.organ_graphics.append(neuron_graphic)
+                neuron_index += 1
+                # if layer_index == 0 and neuron.label is not None:
+                #     self.neuron_graphics.append(rendering.TextGraphic(neuron.label, rendering.Fonts.arial_font(10), (0, y)))
+        right_label_x = right_most_neuron_x + neuron_radius + border
+        for neuron, neuron_index in zip(brain.output_layer, range(len(brain.output_layer))):
+            if neuron.label is not None:
+                y = row_y_values[neuron_index]
+                text = self.add_text(neuron.label, x_value=right_label_x, y_value=y-text_offset)
+                neuron_label_width = max(neuron_label_width, text.bounding_rectangle.width)
+                # label = rendering.TextGraphic(neuron.label, rendering.Fonts.arial_font(10), (right_label_x, y))
+                # self.organ_graphics.append(label)
+        for layer, layer_index in zip(brain.layers, range(len(brain.layers))):
+            if layer_index + 1 < len(brain.layers):
+                next_layer = brain.layers[layer_index + 1]
+                for neuron in layer:
+                    neuron_shape = neuron_shapes[neuron]
+                    for next_neuron in next_layer:
+                        if not next_neuron.is_bias and neuron.has_weight(next_neuron):
+                            next_neuron_shape = neuron_shapes[next_neuron]
+                            synapse_shape = shapes.LineSegment(neuron_shape.center, next_neuron_shape.center)
+                            c_value = int(neuron.get_weight(next_neuron) * 200)
+                            r_value = min(max(-c_value, 0), 255)
+                            g_value = min(max(c_value, 0), 255)
+                            # print("r:"+str(r_value)+", g:")
+                            synapse_graphic = rendering.SimpleOutlineGraphic(synapse_shape,
+                                                                             (r_value, g_value, 0, 0))
+                            self.organ_graphics.append(synapse_graphic)
+        self._set_final_height(self.last_y)
+
+
 class CreatureHighlight(rendering.SimpleCanvas):
     def __init__(self, dimensions, camera=rendering.RelativeCamera()):
         super().__init__(shapes.rect(dimensions), camera,
                          border_thickness=1, border_colour=(255, 255, 255), back_ground_colour=(0, 0, 0))
         self.highlighted_creature = None
-        self.neuron_graphics = []
+        self.organ_highlights = []
 
     def highlight(self, creature):
         if creature is not None:
+            organ_type_counter = {}
+            organ_type_index = {}
+            for organ in creature.organs:
+                if type(organ) not in organ_type_counter:
+                    organ_type_counter[type(organ)] = 0
+                    organ_type_index[type(organ)] = 1
+                organ_type_counter[type(organ)] += 1
             if self.highlighted_creature is not None:
                 self.highlight(None)
             self.highlighted_creature = creature
-            neuron_shapes = {}
-            padding = 5
-            last_y = padding
-            text = rendering.TextGraphic("Brain", self.arial_font(18), (padding, last_y))
-            last_y += text.bounding_rectangle.height
-            self.neuron_graphics.append(text)
-            max_vertical = last_y
+            last_y = 0
+            dimensions = (self.canvas_area.height, self.canvas_area.width)
+            for organ in creature.organs:
+                if organ_type_counter[type(organ)] > 1:
+                    index = organ_type_index[type(organ)]
+                    organ_type_index[type(organ)] += 1
+                else:
+                    index = 0
+                if type(organ) is Brain:
+                    highlight = BrainHighlight(dimensions, index)
+                elif type(organ) is Body:
+                    highlight = BodyHighlight(dimensions, index)
+                elif type(organ) is Mouth:
+                    highlight = MouthHighlight(dimensions, index)
+                elif type(organ) is EuclideanEye:
+                    highlight = EyeHighlight(dimensions, index)
+                elif type(organ) is Fission:
+                    highlight = FissionHighlight(dimensions, index)
+                else:
+                    continue
 
-            neuron_index = 0
-            neuron_row_height = 30
-            neuron_label_width = 0
-            neuron_radius = 10
-            border = 10
-            row_y_values = []
-            for neuron in creature.brain.input_layer:
-                if neuron.label is not None:
-                    y = last_y + neuron_radius + neuron_index * neuron_row_height
-                    row_y_values.append(y)
-                    label = rendering.TextGraphic(neuron.label, self.arial_font(10), (padding, y))
-                    self.neuron_graphics.append(label)
-                    neuron_label_width = max(neuron_label_width, label.bounding_rectangle.width)
-                neuron_index += 1
-            right_most_neuron_x = 0
-            layer_index = 0
-            for layer in creature.brain.layers:
-                x = padding + neuron_label_width + border + layer_index * 50 + neuron_radius
-                right_most_neuron_x = max(right_most_neuron_x, x)
-                neuron_index = 0
-                for neuron in layer:
-                    y = row_y_values[neuron_index]
-                    max_vertical = max(max_vertical, y)
-                    neuron_shape = shapes.Circle((x, y), neuron_radius)
-                    neuron_shapes[neuron] = neuron_shape
-                    neuron_colour = (150, 150, 150, 0)
-                    if neuron.is_bias:
-                        neuron_colour = (255, 0, 0, 0)
-                    neuron_graphic = rendering.SimpleMonoColouredGraphic(neuron_shape, neuron_colour)
-                    self.neuron_graphics.append(neuron_graphic)
-                    neuron_index += 1
-                    # if layer_index == 0 and neuron.label is not None:
-                    #     self.neuron_graphics.append(rendering.TextGraphic(neuron.label, self.arial_font(10), (0, y)))
-                layer_index += 1
-            neuron_index = 0
-            right_label_x = right_most_neuron_x + neuron_radius + border
-            for neuron in creature.brain.output_layer:
-                if neuron.label is not None:
-                    y = row_y_values[neuron_index]
-                    label = rendering.TextGraphic(neuron.label, self.arial_font(10), (right_label_x, y))
-                    self.neuron_graphics.append(label)
-                neuron_index += 1
-            layer_index = 0
-            for layer in creature.brain.layers:
-                if layer_index + 1 < len(creature.brain.layers):
-                    next_layer = creature.brain.layers[layer_index + 1]
-                    for neuron in layer:
-                        neuron_shape = neuron_shapes[neuron]
-                        for next_neuron in next_layer:
-                            if not next_neuron.is_bias and neuron.has_weight(next_neuron):
-                                next_neuron_shape = neuron_shapes[next_neuron]
-                                synapse_shape = shapes.LineSegment(neuron_shape.center, next_neuron_shape.center)
-                                c_value = int(neuron.get_weight(next_neuron) * 200)
-                                r_value = min(max(-c_value, 0), 255)
-                                g_value = min(max(c_value, 0), 255)
-                                # print("r:"+str(r_value)+", g:")
-                                synapse_graphic = rendering.SimpleOutlineGraphic(synapse_shape,
-                                                                                 (r_value, g_value, 0, 0))
-                                self.neuron_graphics.append(synapse_graphic)
-                layer_index += 1
-            last_y = max_vertical
-            self.register_graphics(self.neuron_graphics)
+                self.add_canvas(highlight, (0, last_y))
+                highlight.highlight(organ)
+                self.organ_highlights.append(highlight)
+                last_y += highlight.canvas_area.height
+                if creature.environment is not None:
+                    creature.environment.add_tick_listener(self.refresh_values)
+
         else:
-            self.un_register_graphics(self.neuron_graphics)
-            self.neuron_graphics = []
+            for canvas in self.canvases[:]:
+                self.queue_canvas_for_removal(canvas)
+
+    def refresh_values(self):
+        for organ_canvas in self.canvases:
+            organ_canvas.refresh_values()
 
 
 class Environment(rendering.SimpleCanvas):
@@ -296,7 +478,7 @@ class Environment(rendering.SimpleCanvas):
             creature.execute()
         self.__tick_count += 1
         for listener in self.__tick_listeners:
-            listener(self)
+            listener()
         current_time = time.time()
         self.__last_tick_delta = current_time - self.__last_tick_time
         self.__last_tick_time = current_time
@@ -1082,13 +1264,15 @@ class EuclideanEye(Organ):
         self.body_distance = body_distance
         self.rotation = rotation
         self.radius = radius
+        self.food_pellets_spotted_count = 0
         self.__vision_neuron = InputNeuron("eye: vision")
         self.register_input_neuron(self.__vision_neuron)
 
     def sense(self):
         food = self.creature.environment.find_colliding_food(self.get_field_of_view_shape(), lambda x: False)
         # print(str(len(food))+", "+str(sigmoid_activation(len(food))))
-        self.__vision_neuron.receive_fire(sigmoid_activation(len(food)))
+        self.food_pellets_spotted_count = len(food)
+        self.__vision_neuron.receive_fire(sigmoid_activation(self.food_pellets_spotted_count))
 
     @property
     def vision_neuron(self):
@@ -1129,6 +1313,7 @@ class Mouth(Organ):
         self.__rotation = rotation
         self.__mouth_radius = mouth_radius
         self.__food_capacity = capacity
+        self.__total_amount_eaten = 0
         self.body_distance_changed_listeners = []
         self.rotation_changed_listeners = []
         self.mouth_radius_changed_listeners = []
@@ -1274,7 +1459,16 @@ class Mouth(Organ):
             self.__amount_eaten = self.consume_food(self.__max_mass, colliding_food)
         else:
             self.__amount_eaten = 0
+        self.__total_amount_eaten += self.__amount_eaten
         self.creature.mass += self.__amount_eaten
+
+    @property
+    def amount_eaten(self):
+        return self.__amount_eaten
+
+    @property
+    def total_amount_eaten(self):
+        return self.__total_amount_eaten
 
     def sense(self):
         self.__has_eaten_neuron.receive_fire(sigmoid_activation(self.__amount_eaten))
@@ -1363,6 +1557,10 @@ class Body(Organ):
             rotation_listener(old_rotation, new_rotation)
 
     @property
+    def age(self):
+        return self.creature.age
+
+    @property
     def rotation(self):
         return self.__rotation
 
@@ -1417,8 +1615,9 @@ class Body(Organ):
         self.__notify_position_listeners(old_center, center)
 
     def move(self, dx, dy):
+        old_shape = self.shape.center
         self.shape.translate(dx, dy)
-        self.__notify_position_listeners(self.shape.center)
+        self.__notify_position_listeners(old_shape, self.shape.center)
 
     @property
     def center_x(self):
@@ -1426,8 +1625,9 @@ class Body(Organ):
 
     @center_x.setter
     def center_x(self, x):
+        old_shape = self.shape.center
         self.shape.center_x = x
-        self.__notify_position_listeners(self.shape.center)
+        self.__notify_position_listeners(old_shape, self.shape.center)
 
     @property
     def center_y(self):
@@ -1435,8 +1635,9 @@ class Body(Organ):
 
     @center_y.setter
     def center_y(self, y):
+        old_shape = self.shape.center
         self.shape.center_y = y
-        self.__notify_position_listeners(self.shape.center)
+        self.__notify_position_listeners(old_shape, self.shape.center)
 
     def sense(self):
         creature_age = self.creature.age
@@ -1464,9 +1665,9 @@ class Legs(Organ):
         self.max_distance = max_distance
         self.max_degree_turn = max_degree_turn
         self.__distance_moved = 0
-        self.__distance_moved_neuron = InputNeuron("Legs: distance moved")
-        self.__forward_neuron = OutputNeuron("Legs: forward")
-        self.__turn_clockwise_neuron = OutputNeuron("Legs: turn")
+        self.__distance_moved_neuron = InputNeuron("legs: distance moved")
+        self.__forward_neuron = OutputNeuron("legs: forward")
+        self.__turn_clockwise_neuron = OutputNeuron("legs: turn")
         self.register_input_neuron(self.__distance_moved_neuron)
         self.register_output_neuron(self.__forward_neuron)
         self.register_output_neuron(self.__turn_clockwise_neuron)
@@ -1512,8 +1713,9 @@ class Fission(Organ):
     def __init__(self, mutation_model):
         super().__init__("fission")
         self.mutation_model = mutation_model
-        self.__fission_neuron = OutputNeuron("Fission: fission")
+        self.__fission_neuron = OutputNeuron("fission: fission")
         self.register_output_neuron(self.__fission_neuron)
+        self.offsprings_produced = 0
 
     def clone(self):
         return Fission(copy.deepcopy(self.mutation_model))
@@ -1527,7 +1729,6 @@ class Fission(Organ):
             new_mass = initial_mass * 0.5
             creature.body.mass = new_mass
             if creature.alive:
-
                 split_creature = creature.clone()
                 split_creature.age = 0
                 split_creature.body.rotation = random.random()*360
@@ -1535,8 +1736,10 @@ class Fission(Organ):
                 split_creature.__name = creature.name + "+"
 
                 split_creature.mutate(self.mutation_model)
+                self.offsprings_produced += 1
                 if split_creature.alive:
                     environment.queue_creature(split_creature)
+
                 # print("creature "+self._creature._name+" split itself")
 
     @property
