@@ -95,7 +95,10 @@ class Shape:
         return self.left, self.down, self.width, self.height
 
     def to_int_bounding_box(self):
-        return int(self.left), int(self.down), int(self.width), int(self.height)
+        return int(self.left), int(self.down), int(self.width+0.5), int(self.height+0.5)
+
+    def to_generous_int_bounding_box(self):
+        return int(self.left-1), int(self.down-1), int(self.width+2), int(self.height+2)
 
     def to_bounding_rectangle(self):
         return Rectangle(self.left, self.down, self.width, self.height)
@@ -178,6 +181,12 @@ class Axis(Shape):
 
     def collides_with_rectangle(self, rectangle):
         return rectangle.collides_with_axis(self)
+
+
+# class Oval(Shape):
+#     def __init__(self, center, radii):
+#         self.__center = center
+#         self.__radii = radii
 
 
 class Circle(Shape):
@@ -416,6 +425,9 @@ class Rectangle(Shape):
         self.__down = down
         self.__width = width
         self.__height = height
+
+    def __str__(self):
+        return str((self.left, self.down, self.width, self.height))
 
     def has_area(self):
         return True

@@ -16,14 +16,15 @@ class Manager:
         event_manager.quit_listeners.append(self.quit)
         # self.pause_lock = threading.Lock()
         self._paused = False
+        self.pyg_events = []
 
     def start(self):
         self._running = True
         t = threading.Thread(target=self.run)
         t.start()
-        while True:
-            for event in pygame.event.get():  # User did something
-                self.event_manager.process_event(event)
+        while self._running:
+            for event in pygame.event.get():
+                self.pyg_events.append(event)
 
     def quit(self):
         self._running = False
@@ -58,5 +59,9 @@ class Manager:
                 if not self.paused:
                     self._physics()
             else:
+                events = self.pyg_events
+                self.pyg_events = []
+                for pyg_event in events:  # User did something
+                    self.event_manager.process_event(pyg_event)
                 self._last_render_call = time.time()
                 self._render()

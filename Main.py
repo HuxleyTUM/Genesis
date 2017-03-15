@@ -31,11 +31,11 @@ def create_number_listener(environment):
 
 def food_listener(environment):
     if environment.tick_count % 50 == 0:
-        print("\n--- times ---")
+        # print("\n--- times ---")
         for clock in environment.clocks.clocks:
-            print(str(clock))
+            # print(str(clock))
             clock.reset()
-        print("\n")
+        # print("\n")
     #     print("total time ticking: "+str(environment.clocks_ticking))
     #     print("time thinking: "+str(environment.clocks_thinking))
     #     print("time food consumption: "+str(environment.clocks_consumption_food))
@@ -87,7 +87,8 @@ def place_random_creature(environment):
 
 def create_master_creature():
     name = "Genesis"
-    body = gen.Body(start_mass, shapes.Circle((0, 0), creature_radius))
+    body = gen.Body(start_mass, shapes.Circle((100, 100), creature_radius))
+    body.rotation = 90
     brain = gen.Brain()
     legs = gen.Legs()
     mouth = gen.Mouth(1, 0, 10, 1)
@@ -198,15 +199,15 @@ def create_task_bar(dimensions, render_manager, renderer):
         #play_rect_background.right + padding
 
 
-
 def start(environment_dimensions):
     screen = rendering.Screen((1280, 700))
     side_bar_width = 400
     task_bar_height = 40
     environment_canvas_dimensions = (screen.dimensions[0] - side_bar_width, screen.dimensions[1] - task_bar_height)
-    environment_camera = rendering.RelativeCamera((0, 0), (4, 4))
+    width_ratio = environment_canvas_dimensions[0] / environment_dimensions[0]
+    environment_camera = rendering.RelativeCamera((0, 0), (width_ratio, width_ratio))
     highlight_dimension = (side_bar_width, screen.dimensions[1])
-    environment = gen.Environment(environment_camera, environment_canvas_dimensions, environment_dimensions)
+    environment = gen.Environment(environment_camera, environment_dimensions)
     creature_highlight = gen.CreatureHighlight(highlight_dimension)
 
     environment.queue_creature(create_master_creature())
@@ -229,10 +230,11 @@ def start(environment_dimensions):
     task_bar = create_task_bar((environment_canvas_dimensions[0], task_bar_height), manager, renderer)
     screen.add_canvas(task_bar)
 
-    def process_click(canvas_pos):
+    def process_click(screen_pos):
         found_creature = False
+        local_point = environment.transform_point_from_screen(screen_pos)
         for creature in environment.living_creatures:
-            if creature.body.shape.point_lies_within(canvas_pos):
+            if creature.body.shape.point_lies_within(local_point):
                 creature_highlight.highlight(creature)
                 found_creature = True
                 break

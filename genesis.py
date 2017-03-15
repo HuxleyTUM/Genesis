@@ -65,8 +65,9 @@ def get_dict_attr(obj, attr):
 
 
 class OrganHighlight(rendering.SimpleCanvas):
-    def __init__(self, dimensions, header_text, organ_count, header_size=18, padding=5, camera=rendering.RelativeCamera()):
-        super().__init__(shapes.rect(dimensions), camera, border_colour=(0, 255, 0, 0))
+    def __init__(self, dimensions, header_text, organ_count, header_size=18, padding=6,
+                 camera=rendering.RelativeCamera()):
+        super().__init__(shapes.rect(dimensions), camera)
         self.header_text = header_text
         self.organ_graphics = []
         self.highlighted_organ = None
@@ -77,9 +78,19 @@ class OrganHighlight(rendering.SimpleCanvas):
         self.label = rendering.TextGraphic(header_text, rendering.Fonts.arial_font(header_size),
                                            (padding, self.last_y))
         self.last_y += self.label.bounding_rectangle.height
+        self.line_graphic = None
 
     def _set_final_height(self, height):
-        self.canvas_area.scale((1, height / self.canvas_area.height))
+        if self.line_graphic is not None:
+            self.un_register_graphic(self.line_graphic)
+        line_side_distance = self.local_canvas_area.width / 7
+        line_height = height + self.padding * 2
+        line_start = (line_side_distance, line_height)
+        line_end = (self.local_canvas_area.width - line_side_distance, line_height)
+        self.line_graphic = rendering.SimpleOutlineGraphic(shapes.LineSegment(line_start, line_end), (100, 100, 100, 0))
+        self.register_graphic(self.line_graphic)
+        final_height = line_height+self.padding*0.5
+        self.local_canvas_area.scale((1, final_height / self.local_canvas_area.height))
 
     def highlight(self, organ):
         if organ is not None:
@@ -141,13 +152,32 @@ class MouthHighlight(OrganHighlight):
 
     def visualize(self, mouth):
         labels = ["body distance", "rotation", "mouth_radius", "food capacity", "total amount eaten"]
-        values = [mouth.body_distance, mouth.rotation, mouth.mouth_radius, mouth.food_capacity, 0]
+        values = [mouth.body_distance, mouth.rotation, mouth.mouth_radius, mouth.food_capacity,
+                  self.highlighted_organ.total_amount_eaten]
         self.grid = self.print_grid_text((labels, values))
         self._set_final_height(self.last_y)
 
     def refresh_values(self):
         self.grid[1][4].text = str(self.highlighted_organ.total_amount_eaten)
-        # print(self.highlighted_organ.amount_eaten)
+
+
+class LegsHighlight(OrganHighlight):
+    def __init__(self, dimensions, organ_count, camera=rendering.RelativeCamera()):
+        super().__init__(dimensions, "Legs", organ_count, camera=camera)
+        self.grid = None
+
+    def visualize(self, legs):
+
+        # self.max_distance = max_distance
+        # self.max_degree_turn = max_degree_turn
+        # self.total_distance_moved = 0
+        labels = ["max travel distance", "max degrees turn", "total distance traveled"]
+        values = [legs.max_distance, legs.max_degree_turn, legs.total_distance_moved]
+        self.grid = self.print_grid_text((labels, values))
+        self._set_final_height(self.last_y)
+
+    def refresh_values(self):
+        self.grid[1][2].text = str(self.highlighted_organ.total_distance_moved)
 
 
 class FissionHighlight(OrganHighlight):
@@ -163,7 +193,6 @@ class FissionHighlight(OrganHighlight):
 
     def refresh_values(self):
         self.grid[1][0].text = str(self.highlighted_organ.offsprings_produced)
-        # print(self.highlighted_organ.amount_eaten)
 
 
 class BodyHighlight(OrganHighlight):
@@ -177,18 +206,17 @@ class BodyHighlight(OrganHighlight):
     #
     # self.__rotation = angle
     def visualize(self, body):
-        labels = ["mass", "age", "rotation", "position"]
-        values = [body.mass, body.age, body.rotation, body.center]
+        labels = ["is alive", "mass", "age", "rotation", "position"]
+        values = ["yes" if body.creature.alive else "no", body.mass, body.age, body.rotation, body.center]
         self.grid = self.print_grid_text((labels, values))
         self._set_final_height(self.last_y)
 
     def refresh_values(self):
-        pass
-        self.grid[1][0].text = str(self.highlighted_organ.mass)
-        self.grid[1][1].text = str(self.highlighted_organ.age)
-        self.grid[1][2].text = str(self.highlighted_organ.rotation)
-        self.grid[1][3].text = str(self.highlighted_organ.center)
-        # print(self.highlighted_organ.amount_eaten)
+        self.grid[1][0].text = "yes" if self.highlighted_organ.creature.alive else "no"
+        self.grid[1][1].text = str(self.highlighted_organ.mass)
+        self.grid[1][2].text = str(self.highlighted_organ.age)
+        self.grid[1][3].text = str(self.highlighted_organ.rotation)
+        self.grid[1][4].text = str(self.highlighted_organ.center)
 
 
 class EyeHighlight(OrganHighlight):
@@ -270,7 +298,6 @@ class BrainHighlight(OrganHighlight):
                             c_value = int(neuron.get_weight(next_neuron) * 200)
                             r_value = min(max(-c_value, 0), 255)
                             g_value = min(max(c_value, 0), 255)
-                            # print("r:"+str(r_value)+", g:")
                             synapse_graphic = rendering.SimpleOutlineGraphic(synapse_shape,
                                                                              (r_value, g_value, 0, 0))
                             self.organ_graphics.append(synapse_graphic)
@@ -281,6 +308,9 @@ class CreatureHighlight(rendering.SimpleCanvas):
     def __init__(self, dimensions, camera=rendering.RelativeCamera()):
         super().__init__(shapes.rect(dimensions), camera,
                          border_thickness=1, border_colour=(255, 255, 255), back_ground_colour=(0, 0, 0))
+        self.scroll_pane = rendering.SimpleCanvas(shapes.rect(dimensions), arrow_keys_scroll_vertically=True,
+                                                  mouse_wheel_scrolls_vertically=True)
+        self.add_canvas(self.scroll_pane, (0, 0))
         self.highlighted_creature = None
         self.organ_highlights = []
 
@@ -297,7 +327,7 @@ class CreatureHighlight(rendering.SimpleCanvas):
                 self.highlight(None)
             self.highlighted_creature = creature
             last_y = 0
-            dimensions = (self.canvas_area.height, self.canvas_area.width)
+            dimensions = self.local_canvas_area.dimensions
             for organ in creature.organs:
                 if organ_type_counter[type(organ)] > 1:
                     index = organ_type_index[type(organ)]
@@ -314,22 +344,24 @@ class CreatureHighlight(rendering.SimpleCanvas):
                     highlight = EyeHighlight(dimensions, index)
                 elif type(organ) is Fission:
                     highlight = FissionHighlight(dimensions, index)
+                elif type(organ) is Legs:
+                    highlight = LegsHighlight(dimensions, index)
                 else:
                     continue
 
-                self.add_canvas(highlight, (0, last_y))
+                self.scroll_pane.add_canvas(highlight, (0, last_y))
                 highlight.highlight(organ)
                 self.organ_highlights.append(highlight)
-                last_y += highlight.canvas_area.height
+                last_y += highlight.local_canvas_area.height
                 if creature.environment is not None:
                     creature.environment.add_tick_listener(self.refresh_values)
-
+            self.scroll_pane.local_canvas_area.height = last_y
         else:
-            for canvas in self.canvases[:]:
-                self.queue_canvas_for_removal(canvas)
+            for canvas in self.scroll_pane.canvases[:]:
+                self.scroll_pane.queue_canvas_for_removal(canvas)
 
     def refresh_values(self):
-        for organ_canvas in self.canvases:
+        for organ_canvas in self.scroll_pane.canvases:
             organ_canvas.refresh_values()
 
 
@@ -345,17 +377,17 @@ class Environment(rendering.SimpleCanvas):
 
     Creatures in the world can not decide for themselves how they can move around. They need to make call the method
     move_creature(creature, distance_to_travel)."""
-    def __init__(self, camera, canvas_dimensions, environment_dimensions=(1000, 1000)):
-        super().__init__(shapes.rect(canvas_dimensions), camera)
+    def __init__(self, camera, local_dimensions=(1000, 1000)):
+        super().__init__(shapes.rect(local_dimensions), camera, back_ground_colour=(0, 0, 0, 0))
         # self.__canvas = None
-        self.__canvas_dimensions = canvas_dimensions
+        # self.__canvas_dimensions = local_dimensions
         self.__tick_count = 0
         self.__stage_objects = []
         self.__creatures = []
         self.__living_creatures = []
         # self.__food_pellets = set()
-        self.__food_tree = binary_tree.BinaryTree(environment_dimensions, 6)
-        self.__dimensions = environment_dimensions
+        self.__food_tree = binary_tree.BinaryTree(local_dimensions, 6)
+        # self.__dimensions = local_dimensions
         self.__queued_creatures = []
         self.__tick_listeners = []
         self.__last_tick_time = -1
@@ -418,11 +450,11 @@ class Environment(rendering.SimpleCanvas):
 
     @property
     def width(self):
-        return self.__canvas_dimensions[0]
+        return self.local_canvas_area.width
 
     @property
     def height(self):
-        return self.__canvas_dimensions[1]
+        return self.local_canvas_area.height
 
     @property
     def queued_creatures(self):
@@ -501,12 +533,6 @@ class Environment(rendering.SimpleCanvas):
         [width, height] = creature.body.shape.dimensions
         if new_x+width/2 > self.width or new_x-width/2 < 0 or new_y+height/2 > self.height or new_y-height/2 < 0:
             is_valid = False
-        # if is_valid:
-        #     for other_creature in self._living_creatures:
-        #        if other_creature is not creature and translated_shape.collides(other_creature.body.get_shape()):
-        #             is_valid = False
-        #             #print("collision detected between "+other_creature._name+ " and "+creature._name)
-        #             break
         if is_valid:
             creature.body.center = [new_x, new_y]
         return distance_to_travel if is_valid else 0
@@ -1270,7 +1296,6 @@ class EuclideanEye(Organ):
 
     def sense(self):
         food = self.creature.environment.find_colliding_food(self.get_field_of_view_shape(), lambda x: False)
-        # print(str(len(food))+", "+str(sigmoid_activation(len(food))))
         self.food_pellets_spotted_count = len(food)
         self.__vision_neuron.receive_fire(sigmoid_activation(self.food_pellets_spotted_count))
 
@@ -1498,14 +1523,11 @@ class Mouth(Organ):
         """Tries to consume Food which intersects with shape up the given maximum mass max_mass. The consumed mass
         is returned by this function and all Food that has been consumed will be removed from the Environment."""
 
-        # r = random.randint(0, 1000)
-        # print("start finding food ("+str(r)+")")
         environment = self.creature.environment
         if environment is not None:
             def f(foods): return environment.sum_mass(foods) > self.food_capacity
             return environment.find_colliding_food(self.get_mouth_shape(), f)
         return None
-        # print("finished finding food (" + str(r) + ")")
 
 
 class BodyGraphic(rendering.MonoColouredGraphic):
@@ -1664,6 +1686,7 @@ class Legs(Organ):
         super().__init__("legs")
         self.max_distance = max_distance
         self.max_degree_turn = max_degree_turn
+        self.total_distance_moved = 0
         self.__distance_moved = 0
         self.__distance_moved_neuron = InputNeuron("legs: distance moved")
         self.__forward_neuron = OutputNeuron("legs: forward")
@@ -1694,6 +1717,7 @@ class Legs(Organ):
         angle_to_turn = self.max_degree_turn * angle_factor
         self.creature.environment.turn_creature(self.creature, angle_to_turn)
         self.__distance_moved = self.creature.environment.move_creature(self.creature, distance_to_travel)
+        self.total_distance_moved += self.__distance_moved
         mass_to_burn = distance_to_travel/200 + angle_to_turn/200  # G todo: replace with realistic formula
         self.creature.mass -= mass_to_burn
 
@@ -1739,8 +1763,6 @@ class Fission(Organ):
                 self.offsprings_produced += 1
                 if split_creature.alive:
                     environment.queue_creature(split_creature)
-
-                # print("creature "+self._creature._name+" split itself")
 
     @property
     def fission_neuron(self):

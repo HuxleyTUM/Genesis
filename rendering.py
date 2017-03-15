@@ -229,7 +229,10 @@ def listen_for_key(self):
 
 
 class Camera:
-    def zoom(self, zoom_factor):
+    def zoom_by_factor(self, zoom_factor):
+        raise Exception("Not implemented!")
+
+    def pan(self, delta):
         raise Exception("Not implemented!")
 
     def transform_point_to_parent(self, point):
@@ -250,11 +253,26 @@ class Camera:
 
 class RelativeCamera(Camera):
     def __init__(self, position=(0, 0), zoom=(1, 1)):
-        self.zoom = zoom
-        self.position = position
+        self.__zoom = zoom
+        self.__position = position
 
-    def zoom(self, zoom_factor):
-        self.zoom = [a * b for a, b in zip(self.zoom, zoom_factor)]
+    def __str__(self):
+        return "(position="+str(self.position)+", zoom="+str(self.zoom)+")"
+
+    @property
+    def position(self):
+        return self.__position
+
+    @property
+    def zoom(self):
+        return self.__zoom
+
+    def zoom_by_factor(self, zoom_factor):
+        self.__zoom = [a * b for a, b in zip(self.zoom, zoom_factor)]
+
+    def pan(self, delta):
+        print("panning!")
+        self.__position = [x + d for x, d in zip(self.position, delta)]
 
     def transform_point_to_parent(self, point):
         return self.transform_x_to_parent(point), self.transform_y_to_parent(point)
@@ -339,11 +357,17 @@ class AbsoluteCamera(Camera):
 
 
 class Canvas:
-    def __init__(self, canvas_area, back_ground_colour=(0, 0, 0)):
+    def __init__(self, local_canvas_area, back_ground_colour=(0, 0, 0),
+                 arrow_keys_scroll_vertically=False, arrow_keys_scroll_horizontally=False,
+                 mouse_wheel_scrolls_vertically=False):
+        self.mouse_wheel_scrolls_vertically = mouse_wheel_scrolls_vertically
+        self.arrow_keys_scroll_horizontally = arrow_keys_scroll_horizontally
+        self.arrow_keys_scroll_vertically = arrow_keys_scroll_vertically
         self.canvases_to_remove = []
-        self.needs_redrawing = False
+        self.redraw_whole_screen = False
+        self.__redraw_all_graphics = False
         self.__back_ground_colour = back_ground_colour
-        self.canvas_area = canvas_area
+        self.local_canvas_area = local_canvas_area
         self.graphic_infos_listed = []
         self.__graphic_infos_mapped = {}
         self._graphics_changed_since_last_render = {}
@@ -356,6 +380,10 @@ class Canvas:
         # self.buttons = []
 
     @property
+    def global_canvas_area(self):
+        return self.transform_shape_to_screen(self.local_canvas_area)
+
+    @property
     def back_ground_colour(self):
         return self.__back_ground_colour
 
@@ -363,32 +391,75 @@ class Canvas:
     def back_ground_colour(self, value):
         self.__back_ground_colour = value
 
-    def mouse_pressed(self, point):
+    @property
+    def redraw_all_graphics(self):
+        return self.__redraw_all_graphics
+
+    @redraw_all_graphics.setter
+    def redraw_all_graphics(self, value):
+        self.__redraw_all_graphics = value
+        if value:
+            for canvas in self.canvases:
+                canvas.redraw_all_graphics = value
+
+    def scrolled_up(self, event):
+        if self.mouse_wheel_scrolls_vertically:
+            event.consume()
+            self.move_camera((0, -10))
+            self.redraw_all_graphics = True
+
+    def scrolled_down(self, event):
+        if self.mouse_wheel_scrolls_vertically:
+            event.consume()
+            self.move_camera((0, 10))
+            self.redraw_all_graphics = True
+
+    def mouse_pressed(self, event):
         for listener in self.mouse_pressed_listeners:
-            listener(point)
+            listener(event.screen_mouse_position)
 
-    def mouse_released(self, point):
+    def mouse_released(self, event):
         for listener in self.mouse_released_listeners:
-            listener(point)
+            listener(event.screen_mouse_position)
 
-    # def register_button(self, button):
-    #     self.register_graphics(button.graphics)
-    #
-    #     def check_click(point):
-    #         if button.click_area.point_lies_within(point):
-    #             button.mouse_pressed(point)
-    #     self.mouse_pressed_listeners.append(check_click)
+    def up_key_pressed(self, event):
+        if self.arrow_keys_scroll_vertically:
+            event.consume()
+            self.move_camera((0, 10))
+            self.redraw_all_graphics = True
+
+    def down_key_pressed(self, event):
+        if self.arrow_keys_scroll_vertically:
+            event.consume()
+            self.move_camera((0, -10))
+            self.redraw_all_graphics = True
+
+    def right_key_pressed(self, event):
+        if self.arrow_keys_scroll_horizontally:
+            event.consume()
+            self.move_camera((-10, 0))
+            self.redraw_all_graphics = True
+
+    def left_key_pressed(self, event):
+        if self.arrow_keys_scroll_horizontally:
+            event.consume()
+            self.move_camera((10, 0))
+            self.redraw_all_graphics = True
+
+    def move_camera(self, delta):
+        if self.camera is not None:
+            self.camera.pan(delta)
 
     def register_and_center_graphic(self, graphic):
         graphic_rectangle = graphic.bounding_rectangle
-        clicking_center = self.canvas_area.center
+        clicking_center = self.local_canvas_area.center
         graphic_center = graphic_rectangle.center
         graphic.translate((clicking_center[0] - graphic_center[0], clicking_center[1] - graphic_center[1]))
         self.register_graphic(graphic)
 
     @property
-    def local_bounding(self):
-        return shapes.Rectangle(0, 0, self.canvas_area.left, self.canvas_area.down)
+    def local_bounding_rectangle(self):
+        return shapes.Rectangle(0, 0, self.local_canvas_area.left, self.local_canvas_area.down)
 
     def transform_point_from_screen(self, point):
         if self.parent_canvas is None:
@@ -397,8 +468,8 @@ class Canvas:
             point_from_parent = self.parent_canvas.transform_point_from_screen(point)
             point_in_parent = (point_from_parent[0] - self.position_in_parent[0],
                                point_from_parent[1] - self.position_in_parent[1])
-            point_in_parent = self.camera.transform_point_from_parent(point_in_parent)
-            return point_in_parent
+            local_point = self.camera.transform_point_from_parent(point_in_parent)
+            return local_point
 
     # def transform_point_to_screen
 
@@ -449,7 +520,7 @@ class Canvas:
         canvas.parent_canvas = None
         canvas.position_in_parent = None
         self.__canvases.remove(canvas)
-        self.needs_redrawing = True
+        self.redraw_whole_screen = True
 
     def register_graphics(self, graphics):
         for graphic in graphics:
@@ -498,18 +569,21 @@ class Canvas:
 
 
 class SimpleCanvas(Canvas):
-    def __init__(self, canvas_area, camera=RelativeCamera(), back_ground_area=None,
-                 border_thickness=1, border_colour=None, back_ground_colour=None):
-        super().__init__(canvas_area, back_ground_colour)
+    def __init__(self, local_canvas_area, camera=RelativeCamera(), back_ground_area=None,
+                 border_thickness=1, border_colour=None, back_ground_colour=None,
+                 arrow_keys_scroll_vertically=False, arrow_keys_scroll_horizontally=False,
+                 mouse_wheel_scrolls_vertically=False):
+        super().__init__(local_canvas_area, back_ground_colour, arrow_keys_scroll_vertically,
+                         arrow_keys_scroll_horizontally, mouse_wheel_scrolls_vertically)
         self.border_colour = border_colour
         self.border_thickness = border_thickness
         self.__parent_canvas = None
         self.__position_in_parent = None
-        self.__camera = camera
+        self.__camera = copy.copy(camera)
         self.__back_ground_colour = back_ground_colour
 
         if back_ground_area is None:
-            self.__back_ground_area = canvas_area
+            self.__back_ground_area = local_canvas_area
         else:
             self.__back_ground_area = back_ground_area
         if back_ground_colour is not None:
@@ -581,11 +655,11 @@ class SimpleCanvas(Canvas):
     def paint_shape(self, shape, colour, border_width, transform_shape=False):
         if not transform_shape:
             shape = copy.copy(shape)
-        self.camera.transform_shape_to_parent(shape)
-        if shape.left < self.canvas_area.right and \
-                        shape.right > self.canvas_area.left and \
-                        shape.down < self.canvas_area.up and \
-                        shape.up > self.canvas_area.down:
+        if shape.left < self.local_canvas_area.right and \
+                shape.right > self.local_canvas_area.left and \
+                shape.down < self.local_canvas_area.up and \
+                shape.up > self.local_canvas_area.down:
+            self.camera.transform_shape_to_parent(shape)
             shape.translate(self.position_in_parent)
             return self.parent_canvas.paint_shape(shape, colour, border_width, True)
         else:
@@ -629,9 +703,9 @@ class ButtonBar(SimpleCanvas):
 
     def add_button(self, button):
         self.add_canvas(button, (self.last_x + self.padding, self.padding))
-        scaling = self.button_height / button.canvas_area.height
-        button.camera.zoom = (scaling, scaling)
-        self.last_x += button.canvas_area.width*scaling + self.padding
+        scaling = self.button_height / button.local_canvas_area.height
+        # button.camera.zoom_by_factor((scaling, scaling))
+        self.last_x += button.local_canvas_area.width*scaling + self.padding
 
 
 class Fonts:
@@ -659,7 +733,7 @@ class Screen(Canvas):
         # self._arial_fonts = {}
         self.py_screen = pygame.display.set_mode(dimensions)
         self.dimensions = dimensions
-        self._static_camera = Camera()
+        # self._static_camera = RelativeCamera()
 
     def transform_shape_to_screen(self, shape, transform_shape=False):
         return shape
@@ -697,11 +771,11 @@ class Screen(Canvas):
         else:
             raise "Unknown shape: " + str(type(shape))
         # pygame.draw.rect(self.py_screen, (255, 0, 0, 0), bounding_box, 1)
-        return bounding_box
+        return shape.to_generous_int_bounding_box()
 
     @property
     def camera(self):
-        return self._static_camera
+        return None
 
     # def monospaced_font(self, size):
     #     if size not in self._arial_fonts:
@@ -760,7 +834,7 @@ class PyGameRenderer(Renderer):
         self._last_render_time = -1
         self._current_frame_counter = 0
         self._last_frame = None
-        self.boxes_to_update = []
+        self.screen_boxes_to_update = []
         self.__visualise_boundings = False
 
     def visualise_boundings(self, *args):
@@ -768,10 +842,10 @@ class PyGameRenderer(Renderer):
         self.redraw_canvas(self.screen)
 
     def un_registered_graphic(self, graphic_info):
-        self.boxes_to_update.append(graphic_info.last_rect_rendered)
+        self.screen_boxes_to_update.append(graphic_info.last_rect_rendered)
 
     def redraw_canvas(self, canvas):
-        self.boxes_to_update.append(canvas.canvas_area.to_bounding_box())
+        self.screen_boxes_to_update.append(canvas.global_canvas_area.to_bounding_box())
 
     def render(self):
         if self.render_clock is not None:
@@ -824,8 +898,8 @@ class PyGameRenderer(Renderer):
         # else:
         #     rects_previously_rendered = self._last_frame.rects_rendered
 
-        frame = Frame(self._current_frame_counter, self.screen, self.boxes_to_update)
-        self.boxes_to_update = []
+        frame = Frame(self._current_frame_counter, self.screen, self.screen_boxes_to_update)
+        self.screen_boxes_to_update = []
         self._last_frame = frame
         self._current_frame_counter += 1
         # t = threading.Thread(target=render_with_pygame, args=(frame, self))
@@ -835,12 +909,13 @@ class PyGameRenderer(Renderer):
             render_clock.tock()
 
     def render_canvas(self, canvas, dirty_rectangles):
-        redrawing_whole_canvas = canvas.needs_redrawing
+        redrawing_whole_canvas = canvas.redraw_whole_screen
         if redrawing_whole_canvas:
-            canvas_shape = canvas.transform_shape_to_screen(canvas.canvas_area.to_bounding_rectangle())
-            dirty_rectangles.append(canvas_shape.to_bounding_box())
-            canvas.needs_redrawing = False
-        for graphic_info in list(canvas.graphic_infos):
+            dirty_rectangles.append(canvas.global_canvas_area.to_bounding_box())
+            canvas.redraw_whole_screen = False
+        for graphic_info in list(canvas.graphic_infos_listed):
+            if not redrawing_whole_canvas and canvas.redraw_all_graphics:
+                graphic_info.changed_since_render = True
             graphic = graphic_info.graphic
             if isinstance(graphic, ShapedGraphic):
                 shape = graphic.shape
@@ -875,6 +950,7 @@ class PyGameRenderer(Renderer):
             self.render_canvas(sub_canvas, dirty_rectangles)
         for canvas_to_remove in canvas.canvases_to_remove:
             canvas._remove_canvas(canvas_to_remove)
+        canvas.redraw_all_graphics = False
         canvas.canvases_to_remove = []
 
     def render_with_pygame(self, frame):
