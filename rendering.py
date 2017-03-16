@@ -71,6 +71,10 @@ class TextGraphic(Graphic):
         self.__bounding_rectangle.left = position[0]
         self.__bounding_rectangle.down = position[1]
 
+    def translate(self, delta):
+        self.position = [x+dx for x, dx in zip(self.position, delta)]
+        self.notify_listeners_of_change()
+
     @property
     def bounding_box(self):
         return (self.__bounding_rectangle.left, self.__bounding_rectangle.down,
@@ -114,6 +118,7 @@ class ShapedGraphic(Graphic):
 
     def translate(self, delta):
         self.shape.translate(delta)
+        self.notify_listeners_of_change()
 
 
 class OutlineGraphic(ShapedGraphic):
@@ -518,7 +523,7 @@ class Canvas:
         raise Exception("Can't set position!")
 
     def translate(self, delta):
-        self.position_in_parent = (a+b for a, b in zip(self.position_in_parent, delta))
+        self.position_in_parent = [a+b for a, b in zip(self.position_in_parent, delta)]
 
     @property
     def camera(self):
@@ -721,6 +726,53 @@ class SimpleCanvas(Canvas):
             return self.parent_canvas.paint_shape(shape, colour, border_width, True)
         else:
             return None
+
+
+class Table(SimpleCanvas):
+    def __init__(self, font_size, text_colour, column_count, padding=5):
+        super().__init__(shapes.rect((1, 1)))
+        self.padding = padding
+        self.column_count = column_count
+        self.text_colour = text_colour
+        self.font_size = font_size
+        self.row_graphics = []
+        self.row_width = [0] * column_count
+
+    def add_rows(self, rows):
+        for row in rows:
+            self.add_row(row)
+
+    def add_row(self, row_text):
+        row = []
+        for column_index in range(self.column_count):
+            text_graphic = TextGraphic(str(row_text[column_index]), Fonts.arial_font(self.font_size), self.text_colour)
+            x = 0 if column_index == 0 else sum(self.row_width[0:column_index])
+            row_height = text_graphic.bounding_rectangle.height
+            y = len(self.row_graphics) * row_height
+            self.local_canvas_area.height = max(self.local_canvas_area.height, y + row_height)
+            text_graphic.translate((x, y))
+            row.append(text_graphic)
+            self.register_graphic(text_graphic)
+            self.__check_column_width(column_index, text_graphic.bounding_rectangle.width + self.padding)
+        self.row_graphics.append(row)
+
+    def __check_column_width(self, column_index, width):
+        dx = width - self.row_width[column_index]
+        if dx > 0:
+            self.local_canvas_area.width += dx
+            for row_to_fix in self.row_graphics:
+                for graphic in row_to_fix[column_index + 1:]:
+                    graphic.translate((dx, 0))
+            self.row_width[column_index] = width
+
+    def set(self, x, y, text):
+        text_graphic = self.row_graphics[y][x]
+        text_graphic.text = str(text)
+        self.__check_column_width(x, text_graphic.bounding_rectangle.width + self.padding)
+
+    @property
+    def row_count(self):
+        return len(self.row_graphics)
 
 
 class ScrollingPane(SimpleCanvas):

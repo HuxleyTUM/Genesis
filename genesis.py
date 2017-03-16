@@ -70,6 +70,7 @@ class OrganHighlight(rendering.SimpleCanvas):
     def __init__(self, dimensions, header_text, organ_count, header_size=18, padding=6,
                  camera=rendering.RelativeCamera()):
         super().__init__(shapes.rect(dimensions), camera)
+        self.table = rendering.Table(10, colours.rgb(255), 2)
         self.header_text = header_text
         self.organ_graphics = []
         self.highlighted_organ = None
@@ -81,18 +82,20 @@ class OrganHighlight(rendering.SimpleCanvas):
         self.header_label.position = (padding, self.last_y)
         self.last_y += self.header_label.bounding_rectangle.height
         self.line_graphic = None
+        self.add_canvas(self.table, (padding, self.last_y+padding))
+        self.last_y += self.table.local_canvas_area.height + padding
 
     def _set_final_height(self, height):
         if self.line_graphic is not None:
             self.un_register_graphic(self.line_graphic)
         line_side_distance = self.local_canvas_area.width / 7
-        line_height = height + self.padding * 2
+        line_height = height + self.padding * 3
         line_start = (line_side_distance, line_height)
         line_end = (self.local_canvas_area.width - line_side_distance, line_height)
         self.line_graphic = rendering.SimpleOutlineGraphic(shapes.LineSegment(line_start, line_end), (100, 100, 100, 0))
         self.register_graphic(self.line_graphic)
         final_height = line_height+self.padding*0.5
-        self.local_canvas_area.scale((1, final_height / self.local_canvas_area.height))
+        self.local_canvas_area.height = final_height
 
     def highlight(self, organ):
         if organ is not None:
@@ -105,6 +108,8 @@ class OrganHighlight(rendering.SimpleCanvas):
             for graphic in self.organ_graphics:
                 max_y = max(max_y, graphic.bounding_rectangle.down, graphic.bounding_rectangle.up)
                 self.register_graphic(graphic)
+            for canvas in self.canvases:
+                max_y = max(max_y, canvas.local_canvas_area.up+canvas.position_in_parent[1])
             self._set_final_height(max_y)
         else:
             self.un_register_graphic(self.header_label)
@@ -151,90 +156,72 @@ class OrganHighlight(rendering.SimpleCanvas):
 class MouthHighlight(OrganHighlight):
     def __init__(self, dimensions, organ_count, camera=rendering.RelativeCamera()):
         super().__init__(dimensions, "Mouth", organ_count, camera=camera)
-        self.grid = None
 
     def visualize(self, mouth):
         labels = ["body distance", "rotation", "mouth_radius", "food capacity", "total amount eaten"]
         values = [mouth.body_distance, mouth.rotation, mouth.mouth_radius, mouth.food_capacity,
                   self.highlighted_organ.total_amount_eaten]
-        self.grid = self.print_grid_text((labels, values))
-        self._set_final_height(self.last_y)
+        self.table.add_rows(zip(labels, values))
 
     def refresh_values(self):
-        self.grid[1][4].text = str(self.highlighted_organ.total_amount_eaten)
+        self.table.set(1, 4, str(self.highlighted_organ.total_amount_eaten))
 
 
 class LegsHighlight(OrganHighlight):
     def __init__(self, dimensions, organ_count, camera=rendering.RelativeCamera()):
         super().__init__(dimensions, "Legs", organ_count, camera=camera)
-        self.grid = None
 
     def visualize(self, legs):
-
-        # self.max_distance = max_distance
-        # self.max_degree_turn = max_degree_turn
-        # self.total_distance_moved = 0
         labels = ["max travel distance", "max degrees turn", "total distance traveled"]
         values = [legs.max_distance, legs.max_degree_turn, legs.total_distance_moved]
-        self.grid = self.print_grid_text((labels, values))
-        self._set_final_height(self.last_y)
+        self.table.add_rows(zip(labels, values))
 
     def refresh_values(self):
-        self.grid[1][2].text = str(self.highlighted_organ.total_distance_moved)
+        self.table.set(1, 2,  str(self.highlighted_organ.total_distance_moved))
 
 
 class FissionHighlight(OrganHighlight):
     def __init__(self, dimensions, organ_count, camera=rendering.RelativeCamera()):
         super().__init__(dimensions, "Fission", organ_count, camera=camera)
-        self.grid = None
 
     def visualize(self, fission):
         labels = ["offsprings produced"]
         values = [fission.offsprings_produced]
-        self.grid = self.print_grid_text((labels, values))
-        self._set_final_height(self.last_y)
+        self.table.add_rows(zip(labels, values))
 
     def refresh_values(self):
-        self.grid[1][0].text = str(self.highlighted_organ.offsprings_produced)
+        self.table.set(1, 0,  str(self.highlighted_organ.offsprings_produced))
 
 
 class BodyHighlight(OrganHighlight):
     def __init__(self, dimensions, organ_count, camera=rendering.RelativeCamera()):
         super().__init__(dimensions, "Body", organ_count, camera=camera)
-        self.grid = None
 
-    # self._initial_mass = mass
-    # self.__shape = shape
-    # self._max_mass_burn = max_mass_burn
-    #
-    # self.__rotation = angle
     def visualize(self, body):
         labels = ["is alive", "mass", "age", "rotation", "position"]
         values = ["yes" if body.creature.alive else "no", body.mass, body.age, body.rotation, body.center]
-        self.grid = self.print_grid_text((labels, values))
-        self._set_final_height(self.last_y)
+        self.table.add_rows(zip(labels, values))
+
 
     def refresh_values(self):
-        self.grid[1][0].text = "yes" if self.highlighted_organ.creature.alive else "no"
-        self.grid[1][1].text = str(self.highlighted_organ.mass)
-        self.grid[1][2].text = str(self.highlighted_organ.age)
-        self.grid[1][3].text = str(self.highlighted_organ.rotation)
-        self.grid[1][4].text = str(self.highlighted_organ.center)
+        self.table.set(1, 0,  "yes" if self.highlighted_organ.creature.alive else "no")
+        self.table.set(1, 1,  str(self.highlighted_organ.mass))
+        self.table.set(1, 2,  str(self.highlighted_organ.age))
+        self.table.set(1, 3,  str(self.highlighted_organ.rotation))
+        self.table.set(1, 4,  str(self.highlighted_organ.center))
 
 
 class EyeHighlight(OrganHighlight):
     def __init__(self, dimensions, organ_count, camera=rendering.RelativeCamera()):
         super().__init__(dimensions, "Eye", organ_count, camera=camera)
-        self.grid = None
 
     def visualize(self, eye):
         labels = ["body distance", "rotation", "radius", "food_spotted"]
         values = [eye.body_distance,  eye.rotation, eye.radius, eye.food_pellets_spotted_count]
-        self.grid = self.print_grid_text((labels, values))
-        self._set_final_height(self.last_y)
+        self.table.add_rows(zip(labels, values))
 
     def refresh_values(self):
-        self.grid[1][3].text = str(self.highlighted_organ.food_pellets_spotted_count)
+        self.table.set(1, 3,  str(self.highlighted_organ.food_pellets_spotted_count))
 
 
 def get_graph_points(activation_function, input_range, scalar, offset, x_steps):
@@ -262,6 +249,8 @@ class BrainHighlight(OrganHighlight):
         self.neuron_graphics = {}
         self.synapse_graphics = {}
         self.live_view = False
+        # self.grid = rendering.Table(12, colours.rgb(255), 4)
+        # self.add_canvas(self.grid)
 
     def __draw_neuron(self, neuron, x, y):
         circle = shapes.Circle((x, y), self.neuron_radius)
@@ -324,7 +313,8 @@ class BrainHighlight(OrganHighlight):
                             self.organ_graphics.insert(0, synapse_graphic)
                             self.synapse_graphics[neuron][next_neuron] = synapse_graphic
 
-        self._set_final_height(self.last_y)
+        # self._set_final_height(self.last_y)
+        self.table.translate((0, self.last_y))
 
     def toggle_live_view(self):
         self.live_view = not self.live_view
@@ -360,6 +350,7 @@ class BrainHighlight(OrganHighlight):
         neuron_colour = lambda n: (50, 50, 50, 0) if n.is_bias else (150, 150, 150, 0)
         synapse_colour = lambda n1, n2: colours.visualise_magnitude(n1.get_weight(n2) * 0.5)
         self.redraw(neuron_colour, synapse_colour)
+
 
 class CreatureHighlight(rendering.ScrollingPane):
     def __init__(self, dimensions, camera=rendering.RelativeCamera()):
@@ -409,6 +400,7 @@ class CreatureHighlight(rendering.ScrollingPane):
 
                     self.pane.add_canvas(highlight, (0, last_y))
                     highlight.highlight(organ)
+                    highlight.table.add_row(("tick cost", organ.tick_cost))
                     self.organ_highlights.append(highlight)
                     last_y += highlight.local_canvas_area.height
                     if creature.environment is not None:
@@ -422,8 +414,9 @@ class CreatureHighlight(rendering.ScrollingPane):
                     self.pane.queue_canvas_for_removal(canvas)
 
     def refresh_values(self):
-        for organ_canvas in self.pane.canvases:
-            organ_canvas.refresh_values()
+        for highlight in self.pane.canvases:
+            highlight.table.set(1, highlight.table.row_count-1, highlight.highlighted_organ.tick_cost)
+            highlight.refresh_values()
 
 
 class Environment(rendering.SimpleCanvas):
