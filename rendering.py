@@ -139,13 +139,19 @@ class SimpleOutlineGraphic(OutlineGraphic):
     def border_colour(self):
         return self._border_colour
 
+    @border_colour.setter
+    def border_colour(self, border_colour):
+        self._border_colour = border_colour
+        self.notify_listeners_of_change()
+
     @property
     def border_width(self):
         return self._border_width
 
     @border_width.setter
-    def border_width(self, value):
-        self._border_width = value
+    def border_width(self, border_width):
+        self._border_width = border_width
+        self.notify_listeners_of_change()
 
     @property
     def shape(self):
@@ -154,6 +160,7 @@ class SimpleOutlineGraphic(OutlineGraphic):
     @shape.setter
     def shape(self, shape):
         self._shape = shape
+        self.notify_listeners_of_change()
 
 
 class MonoColouredGraphic(ShapedGraphic):
@@ -574,27 +581,59 @@ class Canvas:
 
 class SimpleCanvas(Canvas):
     def __init__(self, local_canvas_area, camera=RelativeCamera(), back_ground_area=None,
-                 border_thickness=1, border_colour=None, back_ground_colour=None):
+                 border_width=1, border_colour=None, back_ground_colour=None):
         super().__init__(local_canvas_area, back_ground_colour)
-        self.border_colour = border_colour
-        self.border_thickness = border_thickness
+        self.__border_colour = border_colour
+        self.__border_width = border_width
         self.__parent_canvas = None
         self.__position_in_parent = None
         self.__camera = copy.copy(camera)
         self.__back_ground_colour = back_ground_colour
+        self.__back_ground_graphic = None
+        self.__border_graphic = None
 
         if back_ground_area is None:
             self.__back_ground_area = local_canvas_area
         else:
             self.__back_ground_area = back_ground_area
-        if back_ground_colour is not None:
-            self.back_ground_graphic = SimpleMonoColouredGraphic(self.__back_ground_area, back_ground_colour)
-            self.register_graphic(self.back_ground_graphic)
+        self.back_ground_colour = back_ground_colour
+        self.border_colour = border_colour
+        self.border_width = border_width
+        # if back_ground_colour is not None:
+        #     self.back_ground_graphic = SimpleMonoColouredGraphic(self.__back_ground_area, back_ground_colour)
+        #     self.register_graphic(self.back_ground_graphic)
+        # else:
+            
+    @property
+    def border_colour(self):
+        return self.__border_colour
+    
+    @border_colour.setter
+    def border_colour(self, border_colour):
+        self.__set_border(border_colour, self.__border_width)
+
+    @property
+    def border_width(self):
+        return self.__border_width
+
+    @border_width.setter
+    def border_width(self, border_width):
+        self.__set_border(self.__border_colour, border_width)
+
+    def __set_border(self, border_colour, border_width):
+        if border_colour is not None and border_width > 0:
+            if self.__border_graphic is None:
+                self.__border_graphic = SimpleOutlineGraphic(self.__back_ground_area, border_colour, border_width)
+                self.register_graphic(self.__border_graphic)
+            else:
+                self.__border_graphic.border_colour = border_colour
+                self.__border_graphic.border_width = border_width
         else:
-            self.back_ground_graphic = None
-        if border_colour is not None and border_thickness > 0:
-            self.border_graphics = SimpleOutlineGraphic(self.__back_ground_area, border_colour, border_thickness)
-            self.register_graphic(self.border_graphics)
+            if self.__border_graphic is not None:
+                self.un_register_graphic(self.__border_graphic)
+                self.__border_graphic = None
+        self.__border_colour = border_colour
+        self.__border_width = border_width
 
     @property
     def back_ground_colour(self):
@@ -604,15 +643,15 @@ class SimpleCanvas(Canvas):
     def back_ground_colour(self, back_ground_colour):
         self.__back_ground_colour = back_ground_colour
         if back_ground_colour is not None:
-            if self.back_ground_graphic is None:
-                self.back_ground_graphic = SimpleMonoColouredGraphic(self.__back_ground_area, back_ground_colour)
-                self.register_graphic(self.back_ground_graphic)
+            if self.__back_ground_graphic is None:
+                self.__back_ground_graphic = SimpleMonoColouredGraphic(self.__back_ground_area, back_ground_colour)
+                self.register_graphic(self.__back_ground_graphic)
             else:
-                self.back_ground_graphic.fill_colour = back_ground_colour
+                self.__back_ground_graphic.fill_colour = back_ground_colour
         else:
-            if self.back_ground_graphic is not None:
-                self.un_register_graphic(self.back_ground_graphic)
-                self.back_ground_graphic = None
+            if self.__back_ground_graphic is not None:
+                self.un_register_graphic(self.__back_ground_graphic)
+                self.__back_ground_graphic = None
 
     @property
     def parent_canvas(self):
@@ -670,18 +709,17 @@ class SimpleCanvas(Canvas):
 class ScrollingPane(SimpleCanvas):
     def __init__(self, local_canvas_area, scroll_vertically, scroll_horizontally, camera=RelativeCamera()):
         super().__init__(local_canvas_area, camera)
-        self.pane = SimpleCanvas(copy.copy(local_canvas_area), back_ground_colour=(0, 255, 0, 0))
+        self.pane = SimpleCanvas(copy.copy(local_canvas_area))
         self.add_canvas(self.pane)
         self.scroll_horizontally = scroll_horizontally
         self.scroll_vertically = scroll_vertically
 
         pane = self.pane
-        def scroll_up_function(x):
+        def scroll_down_function(x):
             if self.scroll_vertically and pane.camera.position[1] > 0:
                 pane.scroll_up()
-        def scroll_down_function(x):
+        def scroll_up_function(x):
             pane_bottom = pane.local_canvas_area.height - pane.camera.position[1]
-            print(str(pane_bottom)+", "+str(self.local_canvas_area.height))
             if self.scroll_vertically and pane_bottom > self.local_canvas_area.height:
                 pane.scroll_down()
         def scroll_right_function(x):
@@ -698,9 +736,9 @@ class ScrollingPane(SimpleCanvas):
 
 
 class Button(SimpleCanvas):
-    def __init__(self, button_area, border_thickness=1, back_ground_colour=(200, 200, 200, 0), border_colour=None,
+    def __init__(self, button_area, border_width=1, back_ground_colour=(200, 200, 200, 0), border_colour=None,
                  darken_on_press=True):
-        super().__init__(button_area, border_thickness=border_thickness, border_colour=border_colour,
+        super().__init__(button_area, border_width=border_width, border_colour=border_colour,
                          back_ground_colour=back_ground_colour)
         self.darken_on_press = darken_on_press
         self.mouse_pressed_event_listeners.append(self.__mouse_pressed)
@@ -726,7 +764,7 @@ class Button(SimpleCanvas):
 
 class ButtonBar(SimpleCanvas):
     def __init__(self, dimensions, padding=5):
-        super().__init__(shapes.rect(dimensions), border_thickness=1, border_colour=(255, 255, 255, 0),
+        super().__init__(shapes.rect(dimensions), border_width=1, border_colour=(255, 255, 255, 0),
                          back_ground_colour=(0, 0, 0, 0))
         self.padding = padding
         self.last_x = 0

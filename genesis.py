@@ -307,9 +307,9 @@ class BrainHighlight(OrganHighlight):
 class CreatureHighlight(rendering.ScrollingPane):
     def __init__(self, dimensions, camera=rendering.RelativeCamera()):
         super().__init__(shapes.rect(dimensions), True, False, camera)
-        self.border_thickness = 1
+        self.border_width = 1
         self.border_colour = (255, 255, 255, 0)
-        self.back_ground_colour = (255, 0, 0, 0)
+        self.back_ground_colour = (0, 0, 0, 0)
         self.highlighted_creature = None
         self.organ_highlights = []
 
