@@ -7,6 +7,7 @@ import time
 import pygame
 import functools
 import events
+import colours
 
 
 render_lock = threading.Lock()
@@ -29,21 +30,29 @@ class Graphic:
 
     @property
     def bounding_box(self):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     @property
     def bounding_rectangle(self):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     def translate(self, delta):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     def scale(self, scalar):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
+
+    @property
+    def is_visible(self):
+        raise Exception("Not implemented in "+str(type(self)))
+
+    @is_visible.setter
+    def is_visible(self, value):
+        raise Exception("Not implemented in "+str(type(self)))
 
 
 class TextGraphic(Graphic):
-    def __init__(self, text, font, text_colour=(255, 255, 255, 0)):
+    def __init__(self, text, font, text_colour=(255, 255, 255, 0), is_visible=True):
         super().__init__()
         self.__text_colour = text_colour
         self.font = font
@@ -51,7 +60,7 @@ class TextGraphic(Graphic):
         self.__text = None
         self.__bounding_rectangle = shapes.Rectangle(0, 0, 1, 1)
         self.text = text
-        # screen.blit(label, (100, 100))
+        self.__is_visible = is_visible
 
     @property
     def text_colour(self):
@@ -95,6 +104,17 @@ class TextGraphic(Graphic):
         self.pyg_label = self.font.render(self.__text, 1, self.__text_colour)
         self.notify_listeners_of_change()
 
+    @property
+    def is_visible(self):
+        return self.__is_visible
+
+    @is_visible.setter
+    def is_visible(self, is_visible):
+        if is_visible is not self.__is_visible:
+            self.__is_visible = is_visible
+            self.notify_listeners_of_change()
+
+
 
 class ShapedGraphic(Graphic):
     def __init__(self):
@@ -110,15 +130,23 @@ class ShapedGraphic(Graphic):
 
     @property
     def shape(self):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     @shape.setter
     def shape(self, shape):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     def translate(self, delta):
         self.shape.translate(delta)
         self.notify_listeners_of_change()
+
+    @property
+    def is_visible(self):
+        raise Exception("Not implemented in "+str(type(self)))
+
+    @is_visible.setter
+    def is_visible(self, value):
+        raise Exception("Not implemented in "+str(type(self)))
 
 
 class OutlineGraphic(ShapedGraphic):
@@ -127,32 +155,41 @@ class OutlineGraphic(ShapedGraphic):
 
     @property
     def border_colour(self):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     @border_colour.setter
     def border_colour(self, value):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     @property
     def border_width(self):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     @border_width.setter
     def border_width(self, value):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     @property
     def shape(self):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     @shape.setter
     def shape(self, shape):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
+
+    @property
+    def is_visible(self):
+        raise Exception("Not implemented in "+str(type(self)))
+
+    @is_visible.setter
+    def is_visible(self, value):
+        raise Exception("Not implemented in "+str(type(self)))
 
 
 class SimpleOutlineGraphic(OutlineGraphic):
-    def __init__(self, shape, border_colour, border_width=1):
+    def __init__(self, shape, border_colour, border_width=1, is_visible=True):
         super().__init__()
+        self.__is_visible = is_visible
         self._border_width = border_width
         self._border_colour = border_colour
         self._shape = shape
@@ -184,6 +221,16 @@ class SimpleOutlineGraphic(OutlineGraphic):
         self._shape = shape
         self.notify_listeners_of_change()
 
+    @property
+    def is_visible(self):
+        return self.__is_visible
+
+    @is_visible.setter
+    def is_visible(self, is_visible):
+        if is_visible is not self.__is_visible:
+            self.__is_visible = is_visible
+            self.notify_listeners_of_change()
+
 
 class MonoColouredGraphic(ShapedGraphic):
     def __init__(self):
@@ -191,26 +238,35 @@ class MonoColouredGraphic(ShapedGraphic):
 
     @property
     def fill_colour(self):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     @fill_colour.setter
     def fill_colour(self, fill_colour):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     @property
     def shape(self):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     @shape.setter
     def shape(self, shape):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
+
+    @property
+    def is_visible(self):
+        raise Exception("Not implemented in "+str(type(self)))
+
+    @is_visible.setter
+    def is_visible(self, value):
+        raise Exception("Not implemented in "+str(type(self)))
 
 
 class SimpleMonoColouredGraphic(MonoColouredGraphic):
-    def __init__(self, shape, fill_colour):
+    def __init__(self, shape, fill_colour, is_visible=True):
         super().__init__()
         self._fill_colour = fill_colour
         self._shape = shape
+        self.__is_visible = is_visible
 
     @property
     def fill_colour(self):
@@ -230,8 +286,18 @@ class SimpleMonoColouredGraphic(MonoColouredGraphic):
         self._shape = shape
         self.notify_listeners_of_change()
 
+    @property
+    def is_visible(self):
+        return self.__is_visible
 
-def listen_for_key(self):
+    @is_visible.setter
+    def is_visible(self, is_visible):
+        if is_visible is not self.__is_visible:
+            self.__is_visible = is_visible
+            self.notify_listeners_of_change()
+
+
+def listen_for_key_console(self):
     def w(op):
         self._render_width = op(self._render_width, 10)
 
@@ -259,33 +325,33 @@ def listen_for_key(self):
 
 class Camera:
     def zoom_by_factor(self, zoom_factor):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     def pan(self, delta):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     @property
     def position(self):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     @property
     def zoom(self):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     def transform_point_to_parent(self, point):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     def transform_point_from_parent(self, point):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     def transform_x_to_parent(self, point):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     def transform_y_to_parent(self, point):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     def transform_shape_to_parent(self, shape):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
 
 class RelativeCamera(Camera):
@@ -308,7 +374,6 @@ class RelativeCamera(Camera):
         self.__zoom = [a * b for a, b in zip(self.zoom, zoom_factor)]
 
     def pan(self, delta):
-        print("panning!")
         self.__position = [x + d for x, d in zip(self.position, delta)]
 
     def transform_point_to_parent(self, point):
@@ -409,6 +474,7 @@ class Canvas:
         self.__canvases = []
         self.mouse_pressed_event_listeners = []
         self.mouse_released_event_listeners = []
+        self.mouse_canceled_event_listeners = []
         self.mouse_wheel_up_event_listeners = []
         self.mouse_wheel_down_event_listeners = []
         self.pressed_key_left_event_listeners = []
@@ -465,6 +531,9 @@ class Canvas:
 
     def mouse_released(self, event):
         events.fire_listeners(self.mouse_released_event_listeners, event)
+
+    def mouse_canceled(self, event):
+        events.fire_listeners(self.mouse_canceled_event_listeners, event)
 
     def up_key_pressed(self, event):
         events.fire_listeners(self.pressed_key_up_event_listeners, event)
@@ -530,16 +599,16 @@ class Canvas:
         return None
 
     def transform_shape_to_screen(self, shape, transform_shape=False):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     def transform_shape_to_parent(self, shape, transform_shape=False):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     def paint_text(self, label, canvas_rectangle, transform_shape=False):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     def paint_shape(self, shape, colour, border_width, transform_shape=False):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
     def add_canvas(self, canvas, position=(0, 0)):
         canvas.parent_canvas = self
@@ -810,25 +879,36 @@ class Button(SimpleCanvas):
         super().__init__(button_area, border_width=border_width, border_colour=border_colour,
                          back_ground_colour=back_ground_colour)
         self.darken_on_press = darken_on_press
+        self.action_listeners = []
         self.mouse_pressed_event_listeners.append(self.__mouse_pressed)
         self.mouse_released_event_listeners.append(self.__mouse_released)
+        self.mouse_canceled_event_listeners.append(self.__mouse_canceled)
+        self.is_pressed = False
 
     def __mouse_pressed(self, event):
-        if self.darken_on_press:
-            if self.back_ground_colour is not None:
-                self.back_ground_colour = [x * 0.5 for x in self.back_ground_colour]
+        if not self.is_pressed:
+            self.is_pressed = True
+            self._adjust_colour()
+            event.consume()
 
     def __mouse_released(self, event):
-        if self.darken_on_press:
-            if self.back_ground_colour is not None:
-                self.back_ground_colour = [x * 2 for x in self.back_ground_colour]
+        if self.is_pressed:
+            self.is_pressed = False
+            self._adjust_colour()
+            events.fire_listeners(self.action_listeners, event)
+            event.consume()
 
-                # def center_graphic(self, graphic):
-                #     self.graphics.append(graphic)
-                #     graphic_rectangle = graphic.bounding_rectangle
-                #     clicking_center = self.click_area.center
-                #     graphic_center = graphic_rectangle.center
-                #     graphic.translate((clicking_center[0] - graphic_center[0], clicking_center[1] - graphic_center[1]))
+    def _adjust_colour(self):
+        if self.darken_on_press and self.back_ground_colour is not None:
+            colour_factor = 0.5 if self.is_pressed else 2
+            self.back_ground_colour = colours.adjust_colour(self.back_ground_colour, colour_factor)
+
+    def __mouse_canceled(self, event):
+        print("canceled!")
+        if self.is_pressed:
+            self.is_pressed = False
+            self._adjust_colour()
+            event.consume()
 
 
 class RectangularButton(Button):
@@ -899,10 +979,7 @@ class Screen(Canvas):
     def paint_shape(self, shape, colour, border_width, transform_shape=False):
         bounding_box = shape.to_int_bounding_box()
         max_border_width = max(min(bounding_box[2], bounding_box[3]) - 1, 0)
-        # try:
         border_width = min(border_width, max_border_width)
-        # except TypeError:
-        #     print("type: "+str(type(shape)))
         if type(shape) is shapes.Circle:
             pygame.draw.ellipse(self.py_screen, colour, bounding_box, border_width)
         elif type(shape) is shapes.Axis:
@@ -953,7 +1030,7 @@ class Frame:
 class GraphicsSource:
     @property
     def graphics(self):
-        raise Exception("Not implemented!")
+        raise Exception("Not implemented in "+str(type(self)))
 
 
 # rects_previously_rendered = []
@@ -1068,37 +1145,37 @@ class PyGameRenderer(Renderer):
             dirty_rectangles.append(canvas.global_canvas_area.to_bounding_box())
             canvas.redraw_whole_screen = False
         for graphic_info in list(canvas.graphic_infos_listed):
-            if not redrawing_whole_canvas and canvas.redraw_all_graphics:
-                graphic_info.changed_since_render = True
             graphic = graphic_info.graphic
-            if isinstance(graphic, ShapedGraphic):
-                shape = graphic.shape
-                if isinstance(graphic, OutlineGraphic):
-                    colour = graphic.border_colour
-                    border_width = graphic.border_width
-                elif isinstance(graphic, MonoColouredGraphic):
-                    colour = graphic.fill_colour
-                    border_width = 0
-                else:
-                    continue
-                drawn_bounding = canvas.paint_shape(shape, colour, border_width)
+            if graphic.is_visible:
+                if not redrawing_whole_canvas and canvas.redraw_all_graphics:
+                    graphic_info.changed_since_render = True
+                if isinstance(graphic, ShapedGraphic):
+                    shape = graphic.shape
+                    if isinstance(graphic, OutlineGraphic):
+                        colour = graphic.border_colour
+                        border_width = graphic.border_width
+                    elif isinstance(graphic, MonoColouredGraphic):
+                        colour = graphic.fill_colour
+                        border_width = 0
+                    else:
+                        continue
+                    drawn_bounding = canvas.paint_shape(shape, colour, border_width)
 
-            elif isinstance(graphic, TextGraphic):
-                drawn_bounding = canvas.paint_text(graphic.pyg_label, graphic.bounding_rectangle)
-            if drawn_bounding is not None:
-                if self.__visualise_boundings:
-                    # canvas.paint_shape(shape.to_bounding_rectangle(), (255, 0, 0, 0), 1)
-                    pygame.draw.rect(self.screen.py_screen, (255, 0, 0, 0), drawn_bounding, 1)
-
-            if drawn_bounding is not None and graphic_info.changed_since_render:
+                elif isinstance(graphic, TextGraphic):
+                    drawn_bounding = canvas.paint_text(graphic.pyg_label, graphic.bounding_rectangle)
+                if drawn_bounding is not None:
+                    if self.__visualise_boundings:
+                        # canvas.paint_shape(shape.to_bounding_rectangle(), (255, 0, 0, 0), 1)
+                        pygame.draw.rect(self.screen.py_screen, (255, 0, 0, 0), drawn_bounding, 1)
+            if graphic_info.changed_since_render:
                 if not redrawing_whole_canvas:
                     if graphic_info.last_rect_rendered is not None:
                         dirty_rectangles.append(graphic_info.last_rect_rendered)
-
-                    dirty_rectangles.append(drawn_bounding)
+                    if drawn_bounding is not None:
+                        dirty_rectangles.append(drawn_bounding)
                 # pygame.draw.rect(frame.camera.screen, (255, 0, 255, 0), drawn_bounding, 1)
-
-                graphic_info.last_rect_rendered = drawn_bounding
+                if drawn_bounding is not None:
+                    graphic_info.last_rect_rendered = drawn_bounding
                 graphic_info.changed_since_render = False
         for sub_canvas in canvas.canvases:
             self.render_canvas(sub_canvas, dirty_rectangles)
@@ -1156,7 +1233,6 @@ class PyGameRenderer(Renderer):
 #                                                            self._environment.width, self._environment.height))
 #         self._last_render_time = time.time()
 #         t.start()
-#         print("+")
 #
 #
 # def render_to_ascii(shapes_to_render, pixels, additionals, side_infos, output_width, output_height, x_init, y_init,

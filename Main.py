@@ -192,22 +192,21 @@ def create_task_bar(dimensions, render_manager, renderer):
     task_bar = rendering.ButtonBar(dimensions)
     play_button = create_play_button()
     task_bar.add_button(play_button)
-
-    play_button.mouse_pressed_event_listeners.append(lambda event: render_manager.resume())
+    play_button.action_listeners.append(lambda event: render_manager.resume())
 
     pause_button = create_pause_button()    
     task_bar.add_button(pause_button)
-    pause_button.mouse_pressed_event_listeners.append(lambda event: render_manager.pause())
+    pause_button.action_listeners.append(lambda event: render_manager.pause())
 
     visualise_bounding_button = create_visualise_bounding_button()
     task_bar.add_button(visualise_bounding_button)
-    visualise_bounding_button.mouse_pressed_event_listeners.append(renderer.visualise_boundings)
+    visualise_bounding_button.action_listeners.append(renderer.visualise_boundings)
 
     for forward in [True, False]:
         forward_button = create_time_warp_button(forward)
         task_bar.add_button(forward_button)
         time_factor = 2 if forward else 0.5
-        forward_button.mouse_released_event_listeners.append(alter_speed_function(render_manager, time_factor))
+        forward_button.action_listeners.append(alter_speed_function(render_manager, time_factor))
     return task_bar
 
 

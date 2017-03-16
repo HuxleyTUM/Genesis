@@ -71,6 +71,7 @@ class OrganHighlight(rendering.SimpleCanvas):
                  camera=rendering.RelativeCamera()):
         super().__init__(shapes.rect(dimensions), camera)
         self.table = rendering.Table(10, colours.rgb(255), 2)
+        # self.table.add_row("tick cost", 0)
         self.header_text = header_text
         self.organ_graphics = []
         self.highlighted_organ = None
@@ -239,7 +240,7 @@ class BrainHighlight(OrganHighlight):
         button_top = self.header_label.bounding_rectangle.down
         self.add_canvas(self.live_button, (button_left, button_top))
         def live_view_pressed(event): self.toggle_live_view()
-        self.live_button.mouse_pressed_event_listeners.append(live_view_pressed)
+        self.live_button.action_listeners.append(live_view_pressed)
         self.neuron_row_height = 30
         self.neuron_label_width = 0
         self.neuron_radius = 10
@@ -254,10 +255,7 @@ class BrainHighlight(OrganHighlight):
 
     def __draw_neuron(self, neuron, x, y):
         circle = shapes.Circle((x, y), self.neuron_radius)
-        neuron_colour = (150, 150, 150, 0)
-        if neuron.is_bias:
-            neuron_colour = (50, 50, 50, 0)
-        neuron_circle = rendering.SimpleMonoColouredGraphic(circle, neuron_colour)
+        neuron_circle = rendering.SimpleMonoColouredGraphic(circle, (0, 0, 0, 0))
         self.organ_graphics.append(neuron_circle)
         self.neuron_graphics[neuron] = neuron_circle
         scaling = (self.neuron_radius / 2, -self.neuron_radius / 2)
@@ -308,13 +306,14 @@ class BrainHighlight(OrganHighlight):
                         if neuron.has_weight(next_neuron):
                             next_neuron_shape = self.neuron_graphics[next_neuron].shape
                             synapse_shape = shapes.LineSegment(neuron_shape.center, next_neuron_shape.center)
-                            synapse_colour = colours.visualise_magnitude(neuron.get_weight(next_neuron) * 0.5)
-                            synapse_graphic = rendering.SimpleOutlineGraphic(synapse_shape, synapse_colour)
+                            synapse_graphic = rendering.SimpleOutlineGraphic(synapse_shape, colours.BLACK)
                             self.organ_graphics.insert(0, synapse_graphic)
                             self.synapse_graphics[neuron][next_neuron] = synapse_graphic
 
         # self._set_final_height(self.last_y)
+        self.last_y = max_vertical
         self.table.translate((0, self.last_y))
+        self.draw_static_view()
 
     def toggle_live_view(self):
         self.live_view = not self.live_view
@@ -328,18 +327,24 @@ class BrainHighlight(OrganHighlight):
         if self.live_view:
             self.draw_live_view()
 
-    def redraw(self, neuron_colour, synapse_colour):
+    def redraw(self, neuron_colour_f, synapse_colour_f):
         brain = self.highlighted_organ
         for layer, layer_index in zip(brain.layers, range(len(brain.layers))):
             for neuron in layer:
                 neuron_shape = self.neuron_graphics[neuron]
-                neuron_shape.fill_colour = neuron_colour(neuron)
+                neuron_shape.fill_colour = neuron_colour_f(neuron)
                 if layer_index + 1 < len(brain.layers):
                     next_layer = brain.layers[layer_index + 1]
                     for next_neuron in next_layer:
                         if neuron.has_weight(next_neuron):
                             synapse_graphic = self.synapse_graphics[neuron][next_neuron]
-                            synapse_graphic.border_colour = synapse_colour(neuron, next_neuron)
+                            synapse_colour = synapse_colour_f(neuron, next_neuron)
+                            if sum(synapse_colour) > 20:
+                                synapse_graphic.is_visible = True
+                                synapse_graphic.border_colour = synapse_colour
+                            else:
+                                synapse_graphic.is_visible = False
+                                synapse_graphic.border_colour = (0, 255, 255, 0)
 
     def draw_live_view(self):
         neuron_colour = lambda n: colours.visualise_magnitude(n.last_amount)
@@ -672,8 +677,9 @@ class StageObject:
 
 
 class FoodGraphic(rendering.MonoColouredGraphic):
-    def __init__(self, food):
+    def __init__(self, food, is_visible=True):
         super().__init__()
+        self.__is_visible = is_visible
         self.food = food
 
     @property
@@ -683,6 +689,16 @@ class FoodGraphic(rendering.MonoColouredGraphic):
     @property
     def fill_colour(self):
         return 0, 255, 0, 0
+
+    @property
+    def is_visible(self):
+        return self.__is_visible
+
+    @is_visible.setter
+    def is_visible(self, is_visible):
+        if is_visible is not self.__is_visible:
+            self.__is_visible = is_visible
+            self.notify_listeners_of_change()
 
 
 class Food(StageObject):
@@ -941,8 +957,9 @@ class Creature(StageObject):
 
 
 class MonoColouredOrganGraphic(rendering.MonoColouredGraphic):
-    def __init__(self, shape_retriever, colour):
+    def __init__(self, shape_retriever, colour, is_visible=True):
         super().__init__()
+        self.__is_visible = is_visible
         self.colour = colour
         self.shape_retriever = shape_retriever
 
@@ -954,10 +971,21 @@ class MonoColouredOrganGraphic(rendering.MonoColouredGraphic):
     def shape(self):
         return self.shape_retriever()
 
+    @property
+    def is_visible(self):
+        return self.__is_visible
+
+    @is_visible.setter
+    def is_visible(self, is_visible):
+        if is_visible is not self.__is_visible:
+            self.__is_visible = is_visible
+            self.notify_listeners_of_change()
+
 
 class OutlinedOrganGraphic(rendering.OutlineGraphic):
-    def __init__(self, shape_retriever, colour, border_width=1):
+    def __init__(self, shape_retriever, colour, border_width=1, is_visible=True):
         super().__init__()
+        self.__is_visible = is_visible
         self.__border_width = border_width
         self.colour = colour
         self.shape_retriever = shape_retriever
@@ -973,6 +1001,17 @@ class OutlinedOrganGraphic(rendering.OutlineGraphic):
     @property
     def border_width(self):
         return self.__border_width
+
+    @property
+    def is_visible(self):
+        return self.__is_visible
+
+    @is_visible.setter
+    def is_visible(self, is_visible):
+        if is_visible is not self.__is_visible:
+            self.__is_visible = is_visible
+            self.notify_listeners_of_change()
+
 
 class Organ:
     """This class represents an organ which can be used by creatures. It can be added to creatures which will then
@@ -1598,8 +1637,9 @@ class Mouth(Organ):
 
 
 class BodyGraphic(rendering.MonoColouredGraphic):
-    def __init__(self, body):
+    def __init__(self, body, is_visible=True):
         super().__init__()
+        self.__is_visible = is_visible
         self.body = body
 
     @property
@@ -1613,6 +1653,16 @@ class BodyGraphic(rendering.MonoColouredGraphic):
     @property
     def shape(self):
         return self.body.shape
+
+    @property
+    def is_visible(self):
+        return self.__is_visible
+
+    @is_visible.setter
+    def is_visible(self, is_visible):
+        if is_visible is not self.__is_visible:
+            self.__is_visible = is_visible
+            self.notify_listeners_of_change()
 
 
 class Body(Organ):

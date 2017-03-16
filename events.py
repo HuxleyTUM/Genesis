@@ -41,7 +41,9 @@ class EventManager:
                 if pyg_event.type == pygame.MOUSEBUTTONDOWN:
                     if pyg_event.button == 1:
                         active_canvas.mouse_pressed(event)
-                        self.mouse_released_canvas = active_canvas
+                        if event.consumed:
+                            print(type(active_canvas))
+                            self.mouse_released_canvas = active_canvas
                     elif pyg_event.button == 4:
                         active_canvas.mouse_wheel_scrolled_up(event)
                     elif pyg_event.button == 5:
@@ -49,9 +51,9 @@ class EventManager:
                 elif pyg_event.type == pygame.MOUSEBUTTONUP:
                     if pyg_event.button == 1:
                         active_canvas.mouse_released(event)
-                        if event.consumed:
+                        if event.consumed and active_canvas is self.mouse_released_canvas:
                             self.mouse_released_canvas = None
-                if pyg_event.type == pygame.KEYDOWN:
+                elif pyg_event.type == pygame.KEYDOWN:
                     if pyg_event.key == pygame.K_LEFT:
                         active_canvas.left_key_pressed(event)
                     elif pyg_event.key == pygame.K_RIGHT:
@@ -61,11 +63,16 @@ class EventManager:
                     elif pyg_event.key == pygame.K_DOWN:
                         active_canvas.down_key_pressed(event)
                 if event.consumed:
-                    if pyg_event.type == pygame.MOUSEBUTTONUP and \
-                            self.mouse_released_canvas is not None and \
-                            pyg_event.button == 1:
-                        self.mouse_released_canvas.mouse_canceled(event)
                     break
+            if pyg_event.type == pygame.MOUSEBUTTONUP:
+                print(pyg_event.type == pygame.MOUSEBUTTONUP)
+                print(self.mouse_released_canvas is not None)
+                print(pyg_event.button == 1)
+                print(type(self.mouse_released_canvas))
+            if pyg_event.type == pygame.MOUSEBUTTONUP and \
+                    self.mouse_released_canvas is not None and \
+                    pyg_event.button == 1:
+                self.mouse_released_canvas.mouse_canceled(event)
 
     def find_canvases(self, screen_point, parent_canvas, canvases=None):
         if canvases is None:
