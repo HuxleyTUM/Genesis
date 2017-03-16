@@ -17,4 +17,4 @@ def rgb(val):
 
 
 def adjust_colour(colour, factor):
-    return [x * factor for x in colour[:3]] + [0]
+    return [correct_colour_value(x * factor) for x in colour[:3]] + [0]

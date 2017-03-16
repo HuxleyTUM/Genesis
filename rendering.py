@@ -993,10 +993,7 @@ class Screen(Canvas):
             line_segment = shape
             pygame.draw.line(self.py_screen, colour, line_segment.start_point, line_segment.end_point)
         elif type(shape) is shapes.Rectangle:
-            try:
-                pygame.draw.rect(self.py_screen, colour, bounding_box, border_width)
-            except TypeError:
-                print(colour)
+            pygame.draw.rect(self.py_screen, colour, bounding_box, border_width)
         elif type(shape) is shapes.Polygon:
             pygame.draw.polygon(self.py_screen, colour, shape.points, border_width)
         else:
