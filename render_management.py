@@ -39,7 +39,7 @@ class Manager:
             self._paused = True
             # self.pause_lock.acquire()
 
-    def resume(self, *args):
+    def resume(self):
         if self._paused:
             self._paused = False
             # self.pause_lock.release()

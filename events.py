@@ -1,6 +1,17 @@
 import pygame
 
 
+def fire_listeners(listeners, event):
+    for listener in listeners:
+        listener(event)
+
+
+def event_condition(action, condition, event):
+    if condition:
+        event.consume()
+        action()
+
+
 class Event:
     def __init__(self):
         self.consumed = False
@@ -32,9 +43,9 @@ class EventManager:
                         active_canvas.mouse_pressed(event)
                         self.mouse_released_canvas = active_canvas
                     elif pyg_event.button == 4:
-                        active_canvas.scrolled_up(event)
+                        active_canvas.mouse_wheel_scrolled_up(event)
                     elif pyg_event.button == 5:
-                        active_canvas.scrolled_down(event)
+                        active_canvas.mouse_wheel_scrolled_down(event)
                 elif pyg_event.type == pygame.MOUSEBUTTONUP:
                     if pyg_event.button == 1:
                         active_canvas.mouse_released(event)

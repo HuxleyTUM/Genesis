@@ -5,9 +5,9 @@ import shapes
 import numpy as np
 import time
 import pygame
-import sys
-from pygame.locals import *
-import binary_tree as bt
+import functools
+import events
+
 
 render_lock = threading.Lock()
 graphics_counter = 0
@@ -235,6 +235,14 @@ class Camera:
     def pan(self, delta):
         raise Exception("Not implemented!")
 
+    @property
+    def position(self):
+        raise Exception("Not implemented!")
+
+    @property
+    def zoom(self):
+        raise Exception("Not implemented!")
+
     def transform_point_to_parent(self, point):
         raise Exception("Not implemented!")
 
@@ -357,12 +365,7 @@ class AbsoluteCamera(Camera):
 
 
 class Canvas:
-    def __init__(self, local_canvas_area, back_ground_colour=(0, 0, 0),
-                 arrow_keys_scroll_vertically=False, arrow_keys_scroll_horizontally=False,
-                 mouse_wheel_scrolls_vertically=False):
-        self.mouse_wheel_scrolls_vertically = mouse_wheel_scrolls_vertically
-        self.arrow_keys_scroll_horizontally = arrow_keys_scroll_horizontally
-        self.arrow_keys_scroll_vertically = arrow_keys_scroll_vertically
+    def __init__(self, local_canvas_area, back_ground_colour=(0, 0, 0)):
         self.canvases_to_remove = []
         self.redraw_whole_screen = False
         self.__redraw_all_graphics = False
@@ -375,8 +378,16 @@ class Canvas:
         self.graphics_registered_listeners = []
         self.graphics_un_registered_listeners = []
         self.__canvases = []
-        self.mouse_pressed_listeners = []
-        self.mouse_released_listeners = []
+        self.mouse_pressed_event_listeners = []
+        self.mouse_released_event_listeners = []
+        self.mouse_wheel_up_event_listeners = []
+        self.mouse_wheel_down_event_listeners = []
+        self.pressed_key_left_event_listeners = []
+        self.pressed_key_right_event_listeners = []
+        self.pressed_key_up_event_listeners = []
+        self.pressed_key_down_event_listeners = []
+
+        # event_condition
         # self.buttons = []
 
     @property
@@ -402,53 +413,46 @@ class Canvas:
             for canvas in self.canvases:
                 canvas.redraw_all_graphics = value
 
-    def scrolled_up(self, event):
-        if self.mouse_wheel_scrolls_vertically:
-            event.consume()
-            self.move_camera((0, -10))
-            self.redraw_all_graphics = True
+    def mouse_wheel_scrolled_up(self, event):
+        events.fire_listeners(self.mouse_wheel_up_event_listeners, event)
 
-    def scrolled_down(self, event):
-        if self.mouse_wheel_scrolls_vertically:
-            event.consume()
-            self.move_camera((0, 10))
-            self.redraw_all_graphics = True
+    def mouse_wheel_scrolled_down(self, event):
+        events.fire_listeners(self.mouse_wheel_down_event_listeners, event)
+
+    def scroll_up(self):
+        self.move_camera((0, -10))
+
+    def scroll_down(self):
+        self.move_camera((0, 10))
+
+    def scroll_left(self):
+        self.move_camera((-10, 0))
+
+    def scroll_right(self):
+        self.move_camera((10, 0))
 
     def mouse_pressed(self, event):
-        for listener in self.mouse_pressed_listeners:
-            listener(event.screen_mouse_position)
+        events.fire_listeners(self.mouse_pressed_event_listeners, event)
 
     def mouse_released(self, event):
-        for listener in self.mouse_released_listeners:
-            listener(event.screen_mouse_position)
+        events.fire_listeners(self.mouse_released_event_listeners, event)
 
     def up_key_pressed(self, event):
-        if self.arrow_keys_scroll_vertically:
-            event.consume()
-            self.move_camera((0, 10))
-            self.redraw_all_graphics = True
+        events.fire_listeners(self.pressed_key_up_event_listeners, event)
 
     def down_key_pressed(self, event):
-        if self.arrow_keys_scroll_vertically:
-            event.consume()
-            self.move_camera((0, -10))
-            self.redraw_all_graphics = True
+        events.fire_listeners(self.pressed_key_down_event_listeners, event)
 
     def right_key_pressed(self, event):
-        if self.arrow_keys_scroll_horizontally:
-            event.consume()
-            self.move_camera((-10, 0))
-            self.redraw_all_graphics = True
+        events.fire_listeners(self.pressed_key_right_event_listeners, event)
 
     def left_key_pressed(self, event):
-        if self.arrow_keys_scroll_horizontally:
-            event.consume()
-            self.move_camera((10, 0))
-            self.redraw_all_graphics = True
+        events.fire_listeners(self.pressed_key_left_event_listeners, event)
 
     def move_camera(self, delta):
         if self.camera is not None:
             self.camera.pan(delta)
+            self.redraw_all_graphics = True
 
     def register_and_center_graphic(self, graphic):
         graphic_rectangle = graphic.bounding_rectangle
@@ -570,11 +574,8 @@ class Canvas:
 
 class SimpleCanvas(Canvas):
     def __init__(self, local_canvas_area, camera=RelativeCamera(), back_ground_area=None,
-                 border_thickness=1, border_colour=None, back_ground_colour=None,
-                 arrow_keys_scroll_vertically=False, arrow_keys_scroll_horizontally=False,
-                 mouse_wheel_scrolls_vertically=False):
-        super().__init__(local_canvas_area, back_ground_colour, arrow_keys_scroll_vertically,
-                         arrow_keys_scroll_horizontally, mouse_wheel_scrolls_vertically)
+                 border_thickness=1, border_colour=None, back_ground_colour=None):
+        super().__init__(local_canvas_area, back_ground_colour)
         self.border_colour = border_colour
         self.border_thickness = border_thickness
         self.__parent_canvas = None
@@ -666,21 +667,51 @@ class SimpleCanvas(Canvas):
             return None
 
 
+class ScrollingPane(SimpleCanvas):
+    def __init__(self, local_canvas_area, scroll_vertically, scroll_horizontally, camera=RelativeCamera()):
+        super().__init__(local_canvas_area, camera)
+        self.pane = SimpleCanvas(copy.copy(local_canvas_area), back_ground_colour=(0, 255, 0, 0))
+        self.add_canvas(self.pane)
+        self.scroll_horizontally = scroll_horizontally
+        self.scroll_vertically = scroll_vertically
+
+        pane = self.pane
+        def scroll_up_function(x):
+            if self.scroll_vertically and pane.camera.position[1] > 0:
+                pane.scroll_up()
+        def scroll_down_function(x):
+            pane_bottom = pane.local_canvas_area.height - pane.camera.position[1]
+            print(str(pane_bottom)+", "+str(self.local_canvas_area.height))
+            if self.scroll_vertically and pane_bottom > self.local_canvas_area.height:
+                pane.scroll_down()
+        def scroll_right_function(x):
+            if self.scroll_horizontally: pane.scroll_right()
+        def scroll_left_function(x):
+            if self.scroll_horizontally: pane.scroll_left()
+
+        self.mouse_wheel_up_event_listeners.append(scroll_down_function)
+        self.mouse_wheel_down_event_listeners.append(scroll_up_function)
+        self.pressed_key_left_event_listeners.append(scroll_left_function)
+        self.pressed_key_right_event_listeners.append(scroll_right_function)
+        self.pressed_key_down_event_listeners.append(scroll_down_function)
+        self.pressed_key_up_event_listeners.append(scroll_up_function)
+
+
 class Button(SimpleCanvas):
     def __init__(self, button_area, border_thickness=1, back_ground_colour=(200, 200, 200, 0), border_colour=None,
                  darken_on_press=True):
         super().__init__(button_area, border_thickness=border_thickness, border_colour=border_colour,
                          back_ground_colour=back_ground_colour)
         self.darken_on_press = darken_on_press
-        self.mouse_pressed_listeners.append(self.__mouse_pressed)
-        self.mouse_released_listeners.append(self.__mouse_released)
+        self.mouse_pressed_event_listeners.append(self.__mouse_pressed)
+        self.mouse_released_event_listeners.append(self.__mouse_released)
 
-    def __mouse_pressed(self, point):
+    def __mouse_pressed(self, event):
         if self.darken_on_press:
             if self.back_ground_colour is not None:
                 self.back_ground_colour = [x * 0.5 for x in self.back_ground_colour]
 
-    def __mouse_released(self, point):
+    def __mouse_released(self, event):
         if self.darken_on_press:
             if self.back_ground_colour is not None:
                 self.back_ground_colour = [x * 2 for x in self.back_ground_colour]

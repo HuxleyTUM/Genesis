@@ -304,18 +304,18 @@ class BrainHighlight(OrganHighlight):
         self._set_final_height(self.last_y)
 
 
-class CreatureHighlight(rendering.SimpleCanvas):
+class CreatureHighlight(rendering.ScrollingPane):
     def __init__(self, dimensions, camera=rendering.RelativeCamera()):
-        super().__init__(shapes.rect(dimensions), camera,
-                         border_thickness=1, border_colour=(255, 255, 255), back_ground_colour=(0, 0, 0))
-        self.scroll_pane = rendering.SimpleCanvas(shapes.rect(dimensions), arrow_keys_scroll_vertically=True,
-                                                  mouse_wheel_scrolls_vertically=True)
-        self.add_canvas(self.scroll_pane, (0, 0))
+        super().__init__(shapes.rect(dimensions), True, False, camera)
+        self.border_thickness = 1
+        self.border_colour = (255, 255, 255, 0)
+        self.back_ground_colour = (255, 0, 0, 0)
         self.highlighted_creature = None
         self.organ_highlights = []
 
     def highlight(self, creature):
         if creature is not None:
+            creature.highlight()
             organ_type_counter = {}
             organ_type_index = {}
             for organ in creature.organs:
@@ -349,19 +349,22 @@ class CreatureHighlight(rendering.SimpleCanvas):
                 else:
                     continue
 
-                self.scroll_pane.add_canvas(highlight, (0, last_y))
+                self.pane.add_canvas(highlight, (0, last_y))
                 highlight.highlight(organ)
                 self.organ_highlights.append(highlight)
                 last_y += highlight.local_canvas_area.height
                 if creature.environment is not None:
                     creature.environment.add_tick_listener(self.refresh_values)
-            self.scroll_pane.local_canvas_area.height = last_y
+            self.pane.local_canvas_area.height = last_y
         else:
-            for canvas in self.scroll_pane.canvases[:]:
-                self.scroll_pane.queue_canvas_for_removal(canvas)
+            if self.highlighted_creature is not None:
+                self.highlighted_creature.un_highlight()
+                self.highlighted_creature = None
+            for canvas in self.pane.canvases[:]:
+                self.pane.queue_canvas_for_removal(canvas)
 
     def refresh_values(self):
-        for organ_canvas in self.scroll_pane.canvases:
+        for organ_canvas in self.pane.canvases:
             organ_canvas.refresh_values()
 
 
@@ -406,6 +409,7 @@ class Environment(rendering.SimpleCanvas):
     #     elif self.__canvas is not None:
     #         self.__canvas.un_register_graphics(self.graphics)
     #     self.__canvas = canvas
+
 
     @property
     def graphics(self):
@@ -702,6 +706,13 @@ class Creature(StageObject):
 
         self.position_listeners = []
         self.rotation_listeners = []
+
+    def highlight(self):
+        self.body.highlight()
+
+    def un_highlight(self):
+        if self.alive:
+            self.body.un_highlight()
 
     def __notify_position_listeners(self, old_position, new_position):
         for position_listener in self.position_listeners:
@@ -1568,7 +1579,20 @@ class Body(Organ):
         self.rotation_listeners = []
         self.__mass = mass
         self.__graphic = BodyGraphic(self)
+        self.__highlight_graphic = None
         self.mass_listeners.append(self.__graphic.notify_listeners_of_change)
+
+    def highlight(self):
+        if self.__highlight_graphic is None:
+            print("highlighting creature")
+            self.__highlight_graphic = rendering.SimpleOutlineGraphic(self.shape, (255, 0, 0, 0))
+            self.creature.environment.register_graphic(self.__highlight_graphic)
+
+    def un_highlight(self):
+        if self.__highlight_graphic is not None:
+            print("un highlighting creature")
+            self.creature.environment.un_register_graphic(self.__highlight_graphic)
+            self.__highlight_graphic = None
 
     def __notify_position_listeners(self, old_position, new_position):
         for position_listener in self.position_listeners:
@@ -1675,7 +1699,10 @@ class Body(Organ):
 
     @property
     def graphics(self):
-        return [self.__graphic]
+        to_return = [self.__graphic]
+        if self.__highlight_graphic is not None:
+            to_return.append(self.__highlight_graphic)
+        return to_return
 
 
 class Legs(Organ):

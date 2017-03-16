@@ -4,7 +4,7 @@ import shapes
 import copy
 import render_management
 import rendering
-import event_management
+import events
 import functools
 
 start_mass = 200
@@ -175,15 +175,16 @@ def create_task_bar(dimensions, render_manager, renderer):
     task_bar = rendering.ButtonBar(dimensions)
     play_button = create_play_button()
     task_bar.add_button(play_button)
-    play_button.mouse_pressed_listeners.append(render_manager.resume)
+
+    play_button.mouse_pressed_event_listeners.append(lambda event: render_manager.resume())
 
     pause_button = create_pause_button()    
     task_bar.add_button(pause_button)
-    pause_button.mouse_pressed_listeners.append(render_manager.pause)
+    pause_button.mouse_pressed_event_listeners.append(lambda event: render_manager.pause())
 
     visualise_bounding_button = create_visualise_bounding_button()
     task_bar.add_button(visualise_bounding_button)
-    visualise_bounding_button.mouse_pressed_listeners.append(renderer.visualise_boundings)
+    visualise_bounding_button.mouse_pressed_event_listeners.append(renderer.visualise_boundings)
     return task_bar
 
 
@@ -222,7 +223,7 @@ def start(environment_dimensions):
     # environment_canvas = rendering.Canvas(environment_camera)
     screen.add_canvas(environment, (0, task_bar_height))
     screen.add_canvas(creature_highlight, (environment_canvas_dimensions[0], 0))
-    event_manager = event_management.EventManager(screen)
+    event_manager = events.EventManager(screen)
 
     renderer = rendering.PyGameRenderer(screen, render_clock=environment.clocks[gen.RENDER_KEY],
                                         thread_render_clock=environment.clocks[gen.RENDER_THREAD_KEY])
@@ -230,9 +231,9 @@ def start(environment_dimensions):
     task_bar = create_task_bar((environment_canvas_dimensions[0], task_bar_height), manager, renderer)
     screen.add_canvas(task_bar)
 
-    def process_click(screen_pos):
+    def process_click(event):
         found_creature = False
-        local_point = environment.transform_point_from_screen(screen_pos)
+        local_point = environment.transform_point_from_screen(event.screen_mouse_position)
         for creature in environment.living_creatures:
             if creature.body.shape.point_lies_within(local_point):
                 creature_highlight.highlight(creature)
@@ -240,7 +241,7 @@ def start(environment_dimensions):
                 break
         if not found_creature:
             creature_highlight.highlight(None)
-    environment.mouse_pressed_listeners.append(process_click)
+    environment.mouse_pressed_event_listeners.append(process_click)
     manager.start()
 
 start((width, height))
