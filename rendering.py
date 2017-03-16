@@ -576,6 +576,10 @@ class Canvas:
     # def transform_point_to_screen
 
     @property
+    def screen(self):
+        return self.parent_canvas.screen if self.parent_canvas is not None else None
+
+    @property
     def parent_canvas(self):
         return None
 
@@ -610,10 +614,13 @@ class Canvas:
     def paint_shape(self, shape, colour, border_width, transform_shape=False):
         raise Exception("Not implemented in "+str(type(self)))
 
-    def add_canvas(self, canvas, position=(0, 0)):
+    def add_canvas(self, canvas, position=(0, 0), canvas_index=None):
         canvas.parent_canvas = self
         canvas.position_in_parent = position
-        self.__canvases.append(canvas)
+        if canvas_index is None:
+            self.__canvases.append(canvas)
+        else:
+            self.__canvases.insert(canvas_index, canvas)
 
     def queue_canvas_for_removal(self, canvas):
         self.canvases_to_remove.append(canvas)
@@ -651,8 +658,10 @@ class Canvas:
         graphic.remove_has_changed_listener(graphic_info.graphics_changed_listener)
         del self.__graphic_infos_mapped[graphic]
         self.graphic_infos_listed.remove(graphic_info)
-        for listener in self.graphics_un_registered_listeners:
-            listener(graphic_info)
+        screen = self.screen
+        if screen is not None:
+            for listener in screen.graphics_un_registered_listeners:
+                listener(graphic_info)
 
     @property
     def graphic_infos(self):
@@ -966,6 +975,10 @@ class Screen(Canvas):
         self.dimensions = dimensions
         # self._static_camera = RelativeCamera()
 
+    @property
+    def screen(self):
+        return self
+
     def transform_shape_to_screen(self, shape, transform_shape=False):
         return shape
 
@@ -1055,8 +1068,7 @@ class PyGameRenderer(Renderer):
     def __init__(self, screen, render_clock=None, thread_render_clock=None):
         super().__init__()
         self.screen = screen
-        for canvas in self.screen.canvases:
-            canvas.graphics_un_registered_listeners.append(self.un_registered_graphic)
+        self.screen.graphics_un_registered_listeners.append(self.un_registered_graphic)
         self.thread_render_clock = thread_render_clock
         self.render_clock = render_clock
         self._last_render_time = -1
@@ -1162,8 +1174,10 @@ class PyGameRenderer(Renderer):
                     drawn_bounding = canvas.paint_text(graphic.pyg_label, graphic.bounding_rectangle)
                 if drawn_bounding is not None:
                     if self.__visualise_boundings:
-                        # canvas.paint_shape(shape.to_bounding_rectangle(), (255, 0, 0, 0), 1)
-                        pygame.draw.rect(self.screen.py_screen, (255, 0, 0, 0), drawn_bounding, 1)
+                        if graphic_info.changed_since_render:
+                            pygame.draw.rect(self.screen.py_screen, (255, 0, 0, 0), drawn_bounding, 1)
+                        else:
+                            pygame.draw.rect(self.screen.py_screen, (255, 100, 100, 0), drawn_bounding, 1)
             if graphic_info.changed_since_render:
                 if not redrawing_whole_canvas:
                     if graphic_info.last_rect_rendered is not None:

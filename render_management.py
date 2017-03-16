@@ -4,7 +4,7 @@ import pygame
 
 
 class Manager:
-    def __init__(self, physics, render, event_manager):
+    def __init__(self, event_manager, physics=None, render=None):
         self.event_manager = event_manager
         self._running = False
         self._physics = physics
@@ -65,7 +65,7 @@ class Manager:
                 time.sleep(time_to_next_call)
             if time_to_next_physics_call < time_to_next_render_call:
                 self._last_physics_call = time.time()
-                if not self.paused:
+                if not self.paused and self._physics is not None:
                     self._physics()
             else:
                 events = self.pyg_events
@@ -73,4 +73,5 @@ class Manager:
                 for pyg_event in events:  # User did something
                     self.event_manager.process_event(pyg_event)
                 self._last_render_call = time.time()
-                self._render()
+                if self._render is not None:
+                    self._render()

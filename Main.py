@@ -6,6 +6,7 @@ import render_management
 import rendering
 import events
 import functools
+import math
 
 start_mass = 200
 mutation_model = gen.MutationModel(0.2, 0.3)
@@ -22,6 +23,8 @@ init_food_mass = 5
 
 init_creature_count = 5
 min_creature_count = int(5 * factor ** 2)
+
+active_environment = None
 
 
 def create_number_listener(environment):
@@ -183,13 +186,47 @@ def create_visualise_bounding_button():
     return button
 
 
+def create_refresh_button():
+    button_area = shapes.Rectangle(0, 0, 30, 30)
+    button = rendering.Button(button_area)
+    points = []
+    dy = None
+    y = 0
+    for angle in range(0, 270, 15):
+        point_outer = (-math.sin(math.radians(angle)) * 9, -math.cos(math.radians(angle)) * 9)
+        point_inner = (-math.sin(math.radians(angle)) * 7, -math.cos(math.radians(angle)) * 7)
+        points.append(point_outer)
+        points.insert(0, point_inner)
+        if dy is None:
+            dy = (point_outer[1] - point_inner[1])
+            y = (point_outer[1] + point_inner[1])/2
+    polygon_points = [(5, y), (0, y+5), (0, y-5)]
+    print(polygon_points)
+    arrow = shapes.Polygon(polygon_points)
+    open_circle = shapes.Polygon(points)
+    shape_graphic = rendering.SimpleMonoColouredGraphic(open_circle, (0, 255, 0, 0))
+    arrow_graphic = rendering.SimpleMonoColouredGraphic(arrow, (0, 255, 0, 0))
+    old_pos = (open_circle.left, open_circle.down)
+    button.register_and_center_graphic(shape_graphic)
+    new_pos = (open_circle.left, open_circle.down)
+    arrow.translate([x-y for x, y in zip(new_pos, old_pos)])
+    button.register_graphic(arrow_graphic)
+
+    return button
+
+
 def alter_speed_function(render_manager, factor):
     def f(event): render_manager.pps *= factor
     return f
 
 
-def create_task_bar(dimensions, render_manager, renderer):
+def create_task_bar(dimensions, render_manager, renderer, create_environment):
     task_bar = rendering.ButtonBar(dimensions)
+
+    refresh_button = create_refresh_button()
+    task_bar.add_button(refresh_button)
+    refresh_button.action_listeners.append(lambda event: create_environment())
+
     play_button = create_play_button()
     task_bar.add_button(play_button)
     play_button.action_listeners.append(lambda event: render_manager.resume())
@@ -221,17 +258,12 @@ def create_task_bar(dimensions, render_manager, renderer):
 #
         #play_rect_background.right + padding
 
-
-def start(environment_dimensions):
-    screen = rendering.Screen((1280, 700))
-    side_bar_width = 400
-    task_bar_height = 40
-    environment_canvas_dimensions = (screen.dimensions[0] - side_bar_width, screen.dimensions[1] - task_bar_height)
-    width_ratio = environment_canvas_dimensions[0] / environment_dimensions[0]
-    environment_camera = rendering.RelativeCamera((0, 0), (width_ratio, width_ratio))
-    highlight_dimension = (side_bar_width, screen.dimensions[1])
+def create_environment(screen, environment_camera, environment_dimensions, creature_highlight,
+                       task_bar_height, renderer, manager):
+    global active_environment
+    if active_environment is not None:
+        screen.queue_canvas_for_removal(active_environment)
     environment = gen.Environment(environment_camera, environment_dimensions)
-    creature_highlight = gen.CreatureHighlight(highlight_dimension)
 
     environment.queue_creature(create_master_creature())
     for i in range(init_food_count):
@@ -241,17 +273,11 @@ def start(environment_dimensions):
 
     environment.add_tick_listener(functools.partial(food_listener, environment))
     environment.add_tick_listener(functools.partial(create_number_listener, environment))
-
-    # environment_canvas = rendering.Canvas(environment_camera)
-    screen.add_canvas(environment, (0, task_bar_height))
-    screen.add_canvas(creature_highlight, (environment_canvas_dimensions[0], 0))
-    event_manager = events.EventManager(screen)
-
-    renderer = rendering.PyGameRenderer(screen, render_clock=environment.clocks[gen.RENDER_KEY],
-                                        thread_render_clock=environment.clocks[gen.RENDER_THREAD_KEY])
-    manager = render_management.Manager(environment.tick, renderer.render, event_manager)
-    task_bar = create_task_bar((environment_canvas_dimensions[0], task_bar_height), manager, renderer)
-    screen.add_canvas(task_bar)
+    screen.add_canvas(environment, (0, task_bar_height), 0)
+    active_environment = environment
+    renderer.render_clock = environment.clocks[gen.RENDER_KEY]
+    renderer.thread_render_clock = environment.clocks[gen.RENDER_THREAD_KEY]
+    manager._physics = environment.tick
 
     def process_click(event):
         found_creature = False
@@ -263,7 +289,31 @@ def start(environment_dimensions):
                 break
         if not found_creature:
             creature_highlight.highlight(None)
+
     environment.mouse_pressed_event_listeners.append(process_click)
+
+
+def start(environment_dimensions):
+    screen = rendering.Screen((1280, 700))
+    side_bar_width = 400
+    task_bar_height = 40
+    environment_canvas_dimensions = (screen.dimensions[0] - side_bar_width, screen.dimensions[1] - task_bar_height)
+    width_ratio = environment_canvas_dimensions[0] / environment_dimensions[0]
+    environment_camera = rendering.RelativeCamera((0, 0), (width_ratio, width_ratio))
+    highlight_dimension = (side_bar_width, screen.dimensions[1])
+    creature_highlight = gen.CreatureHighlight(highlight_dimension)
+    screen.add_canvas(creature_highlight, (environment_canvas_dimensions[0], 0))
+    event_manager = events.EventManager(screen)
+
+    renderer = rendering.PyGameRenderer(screen)
+    manager = render_management.Manager(event_manager, render=renderer.render)
+
+    create_environment_f = functools.partial(create_environment, screen, environment_camera, environment_dimensions,
+                                             creature_highlight, task_bar_height, renderer, manager)
+    create_environment_f()
+    task_bar = create_task_bar((environment_canvas_dimensions[0], task_bar_height), manager, renderer, create_environment_f)
+    screen.add_canvas(task_bar)
+
     manager.start()
 
 start((width, height))

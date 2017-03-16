@@ -1169,9 +1169,10 @@ class Neuron:
         self._connections.pop(neuron)
 
     def connect_to_neuron(self, neuron, weight=0, mutation_model=None):
-        if mutation_model is not None and random.random() < mutation_model.mutation_likelihood:
-            weight += random_from_interval(-mutation_model.mutation_strength, mutation_model.mutation_strength)
-        self._connections[neuron] = weight
+        if not neuron.is_bias:
+            if mutation_model is not None and random.random() < mutation_model.mutation_likelihood:
+                weight += random_from_interval(-mutation_model.mutation_strength, mutation_model.mutation_strength)
+            self._connections[neuron] = weight
 
     def receive_fire(self, amount):
         self._summed_input += amount
@@ -1264,7 +1265,7 @@ class Brain(Organ):
             to_layer_other = other_brain.layers[layer_index+1]
             for from_neuron_this, from_neuron_other in zip(from_layer_this, from_layer_other):
                 for to_neuron_this, to_neuron_other in zip(to_layer_this, to_layer_other):
-                    if not to_neuron_this.is_bias:
+                    if to_neuron_this.has_weight(to_neuron_other):
                         weight = from_neuron_other.get_weight(to_neuron_other)
                         from_neuron_this.connect_to_neuron(to_neuron_this, weight)
 

@@ -603,10 +603,10 @@ class Polygon(Shape):
         return True
 
     def __recalc_values(self):
-        min_x = 0
-        max_x = 0
-        min_y = 0
-        max_y = 0
+        min_x = math.inf
+        max_x = -math.inf
+        min_y = math.inf
+        max_y = -math.inf
         for point in self.__points:
             min_x = min(point[0], min_x)
             max_x = max(point[0], max_x)
