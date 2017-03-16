@@ -145,6 +145,18 @@ def create_play_button():
     return button
 
 
+def create_time_warp_button(increase):
+    button = rendering.RectangularButton((30, 30))
+    c = 1 if increase else -1
+    for dx in [-5, 5]:
+        button_icon = shapes.Polygon([(3*c, 0), (-3*c, -10), (-3*c, 10)])
+        # self.button_graphic_background = rendering.SimpleMonoColouredGraphic(button_rect_background, )
+        button_graphic = rendering.SimpleMonoColouredGraphic(button_icon, (0, 255, 0, 0))
+        button.register_and_center_graphic(button_graphic)
+        button_graphic.translate((dx, 0))
+    return button
+
+
 def create_pause_button():
     button_area = shapes.Rectangle(0, 0, 30, 30)
     button = rendering.Button(button_area)
@@ -171,6 +183,11 @@ def create_visualise_bounding_button():
     return button
 
 
+def alter_speed_function(render_manager, factor):
+    def f(event): render_manager.pps *= factor
+    return f
+
+
 def create_task_bar(dimensions, render_manager, renderer):
     task_bar = rendering.ButtonBar(dimensions)
     play_button = create_play_button()
@@ -185,6 +202,12 @@ def create_task_bar(dimensions, render_manager, renderer):
     visualise_bounding_button = create_visualise_bounding_button()
     task_bar.add_button(visualise_bounding_button)
     visualise_bounding_button.mouse_pressed_event_listeners.append(renderer.visualise_boundings)
+
+    for forward in [True, False]:
+        forward_button = create_time_warp_button(forward)
+        task_bar.add_button(forward_button)
+        time_factor = 2 if forward else 0.5
+        forward_button.mouse_released_event_listeners.append(alter_speed_function(render_manager, time_factor))
     return task_bar
 
 

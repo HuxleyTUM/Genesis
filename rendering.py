@@ -43,15 +43,33 @@ class Graphic:
 
 
 class TextGraphic(Graphic):
-    def __init__(self, text, font, position):
+    def __init__(self, text, font, text_colour=(255, 255, 255, 0)):
         super().__init__()
-        self.position = position
+        self.__text_colour = text_colour
         self.font = font
-        self.__bounding_rectangle = None
-        self.label = None
+        self.pyg_label = None
         self.__text = None
+        self.__bounding_rectangle = shapes.Rectangle(0, 0, 1, 1)
         self.text = text
         # screen.blit(label, (100, 100))
+
+    @property
+    def text_colour(self):
+        return self.__text_colour
+
+    @text_colour.setter
+    def text_colour(self, text_colour):
+        self.__text_colour = text_colour
+        self.notify_listeners_of_change()
+
+    @property
+    def position(self):
+        return self.__bounding_rectangle.left, self.__bounding_rectangle.down
+
+    @position.setter
+    def position(self, position):
+        self.__bounding_rectangle.left = position[0]
+        self.__bounding_rectangle.down = position[1]
 
     @property
     def bounding_box(self):
@@ -69,9 +87,8 @@ class TextGraphic(Graphic):
     @text.setter
     def text(self, text):
         self.__text = text
-        (width, height) = self.font.size(text)
-        self.__bounding_rectangle = shapes.Rectangle(self.position[0], self.position[1], width, height)
-        self.label = self.font.render(self.__text, 1, (255, 255, 255))
+        self.__bounding_rectangle.dimensions = self.font.size(text)
+        self.pyg_label = self.font.render(self.__text, 1, self.__text_colour)
         self.notify_listeners_of_change()
 
 
@@ -762,6 +779,19 @@ class Button(SimpleCanvas):
                 #     graphic.translate((clicking_center[0] - graphic_center[0], clicking_center[1] - graphic_center[1]))
 
 
+class RectangularButton(Button):
+    def __init__(self, dimensions):
+        super().__init__(shapes.rect(dimensions))
+
+
+class TextButton(RectangularButton):
+    def __init__(self, text, font_size=12):
+        super().__init__((1, 1))
+        self.label = TextGraphic(text, Fonts.arial_font(font_size), (0, 0, 0, 0))
+        self.register_graphic(self.label)
+        self.local_canvas_area.dimensions = self.label.bounding_rectangle.dimensions
+
+
 class ButtonBar(SimpleCanvas):
     def __init__(self, dimensions, padding=5):
         super().__init__(shapes.rect(dimensions), border_width=1, border_colour=(255, 255, 255, 0),
@@ -834,7 +864,10 @@ class Screen(Canvas):
             line_segment = shape
             pygame.draw.line(self.py_screen, colour, line_segment.start_point, line_segment.end_point)
         elif type(shape) is shapes.Rectangle:
-            pygame.draw.rect(self.py_screen, colour, bounding_box, border_width)
+            try:
+                pygame.draw.rect(self.py_screen, colour, bounding_box, border_width)
+            except TypeError:
+                print(colour)
         elif type(shape) is shapes.Polygon:
             pygame.draw.polygon(self.py_screen, colour, shape.points, border_width)
         else:
@@ -999,7 +1032,7 @@ class PyGameRenderer(Renderer):
                 drawn_bounding = canvas.paint_shape(shape, colour, border_width)
 
             elif isinstance(graphic, TextGraphic):
-                drawn_bounding = canvas.paint_text(graphic.label, graphic.bounding_rectangle)
+                drawn_bounding = canvas.paint_text(graphic.pyg_label, graphic.bounding_rectangle)
             if drawn_bounding is not None:
                 if self.__visualise_boundings:
                     # canvas.paint_shape(shape.to_bounding_rectangle(), (255, 0, 0, 0), 1)

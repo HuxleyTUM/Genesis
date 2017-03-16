@@ -31,6 +31,15 @@ class Manager:
         pygame.quit()
 
     @property
+    def pps(self):
+        return 1/self._physics_delta
+
+    @pps.setter
+    def pps(self, value):
+        self._physics_delta = 1/value
+        print(self._physics_delta)
+
+    @property
     def paused(self):
         return self._paused
 

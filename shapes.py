@@ -76,9 +76,17 @@ class Shape:
     def left(self):
         return self.center_x - self.width/2
 
+    @left.setter
+    def left(self, left):
+        self.translate_x(left - self.left)
+
     @property
     def down(self):
         return self.center_y - self.height/2
+
+    @down.setter
+    def down(self, down):
+        self.translate_y(down - self.down)
 
     @property
     def right(self):
@@ -104,7 +112,13 @@ class Shape:
         return Rectangle(self.left, self.down, self.width, self.height)
 
     def translate(self, delta):
-        self.center = [self.center_x + delta[0], self.center_y + delta[1]]
+        self.center = (self.center_x + delta[0], self.center_y + delta[1])
+
+    def translate_x(self, delta_x):
+        self.center = (self.center_x + delta_x, self.center_y)
+
+    def translate_y(self, delta_y):
+        self.center = (self.center_x, self.center_y + delta_y)
 
     def scale(self, scalar):
         self.width = self.width * scalar[0]
@@ -461,9 +475,17 @@ class Rectangle(Shape):
     def left(self):
         return self.__left
 
+    @left.setter
+    def left(self, left):
+        self.translate_x(left - self.__left)
+
     @property
     def down(self):
         return self.__down
+
+    @down.setter
+    def down(self, down):
+        self.translate_y(down - self.__down)
 
     @property
     def right(self):
@@ -475,7 +497,12 @@ class Rectangle(Shape):
 
     @property
     def dimensions(self):
-        return [self.__width, self.__height]
+        return self.__width, self.__height
+
+    @dimensions.setter
+    def dimensions(self, dimensions):
+        self.__width = dimensions[0]
+        self.__height = dimensions[1]
 
     @property
     def width(self):

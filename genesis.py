@@ -9,6 +9,8 @@ import operator
 import binary_tree
 from clock import *
 import rendering
+import functools
+import colours
 
 # G todo: add some reusable way of mutating parameters. maybe using the Beta function?
 THINKING_KEY = "thinking"
@@ -75,9 +77,9 @@ class OrganHighlight(rendering.SimpleCanvas):
         self.last_y = padding
         if organ_count > 0:
             header_text += " "+str(organ_count)
-        self.label = rendering.TextGraphic(header_text, rendering.Fonts.arial_font(header_size),
-                                           (padding, self.last_y))
-        self.last_y += self.label.bounding_rectangle.height
+        self.header_label = rendering.TextGraphic(header_text, rendering.Fonts.arial_font(header_size))
+        self.header_label.position = (padding, self.last_y)
+        self.last_y += self.header_label.bounding_rectangle.height
         self.line_graphic = None
 
     def _set_final_height(self, height):
@@ -96,7 +98,7 @@ class OrganHighlight(rendering.SimpleCanvas):
         if organ is not None:
             if self.highlighted_organ is not None:
                 self.highlight(None)
-            self.register_graphic(self.label)
+            self.register_graphic(self.header_label)
             self.highlighted_organ = organ
             self.visualize(organ)
             max_y = 0
@@ -105,7 +107,7 @@ class OrganHighlight(rendering.SimpleCanvas):
                 self.register_graphic(graphic)
             self._set_final_height(max_y)
         else:
-            self.un_register_graphic(self.label)
+            self.un_register_graphic(self.header_label)
             self.un_register_graphics(self.organ_graphics)
             self.organ_graphics = []
 
@@ -115,7 +117,8 @@ class OrganHighlight(rendering.SimpleCanvas):
         update_last_y = y_value is None
         if update_last_y:
             y_value = self.last_y
-        label = rendering.TextGraphic(text, rendering.Fonts.arial_font(10), (x_value, y_value))
+        label = rendering.TextGraphic(text, rendering.Fonts.arial_font(10))
+        label.position = (x_value, y_value)
         self.organ_graphics.append(label)
         if update_last_y:
             self.last_y += label.bounding_rectangle.height
@@ -234,134 +237,189 @@ class EyeHighlight(OrganHighlight):
         self.grid[1][3].text = str(self.highlighted_organ.food_pellets_spotted_count)
 
 
+def get_graph_points(activation_function, input_range, scalar, offset, x_steps):
+    points = []
+    for x in np.arange(input_range[0], input_range[1], x_steps):
+        points.append((x*scalar[0]+offset[0], activation_function(x)*scalar[1]+offset[1]))
+    return points
+
+
 class BrainHighlight(OrganHighlight):
     def __init__(self, dimensions, organ_count, camera=rendering.RelativeCamera()):
         super().__init__(dimensions, "Brain", organ_count, camera=camera)
+        self.live_button = rendering.TextButton("live view")
+        button_left = self.header_label.bounding_rectangle.right + self.padding
+        button_top = self.header_label.bounding_rectangle.down
+        self.add_canvas(self.live_button, (button_left, button_top))
+        def live_view_pressed(event): self.toggle_live_view()
+        self.live_button.mouse_pressed_event_listeners.append(live_view_pressed)
+        self.neuron_row_height = 30
+        self.neuron_label_width = 0
+        self.neuron_radius = 10
+        self.border = 10
+        self.column_width = 50
+        self.text_offset = 6
+        self.neuron_graphics = {}
+        self.synapse_graphics = {}
+        self.live_view = False
+
+    def __draw_neuron(self, neuron, x, y):
+        circle = shapes.Circle((x, y), self.neuron_radius)
+        neuron_colour = (150, 150, 150, 0)
+        if neuron.is_bias:
+            neuron_colour = (50, 50, 50, 0)
+        neuron_circle = rendering.SimpleMonoColouredGraphic(circle, neuron_colour)
+        self.organ_graphics.append(neuron_circle)
+        self.neuron_graphics[neuron] = neuron_circle
+        scaling = (self.neuron_radius / 2, -self.neuron_radius / 2)
+        points = get_graph_points(neuron._activation_function, (-2, 2), scaling, (x, y), 0.2)
+        for i in range(len(points)-1):
+            line = shapes.LineSegment(points[i], points[i + 1])
+            self.organ_graphics.append(rendering.SimpleOutlineGraphic(line, (255, 255, 255)))
 
     def visualize(self, brain):
-        neuron_shapes = {}
-
         max_vertical = self.last_y
-
-        neuron_row_height = 30
-        neuron_label_width = 0
-        neuron_radius = 10
-        border = 10
-        column_width = 50
-        text_offset = 6
         row_y_values = []
         for row_index in range(max(len(brain.input_layer),
                                    len(brain.hidden_layer),
                                    len(brain.output_layer))):
-            y = self.last_y + neuron_radius + row_index * neuron_row_height
+            y = self.last_y + self.neuron_radius + row_index * self.neuron_row_height
             row_y_values.append(y)
         for neuron, neuron_index in zip(brain.input_layer, range(len(brain.input_layer))):
             y = row_y_values[neuron_index]
             if neuron.label is not None:
-                text = self.add_text(neuron.label, y_value=y - text_offset)
-                neuron_label_width = max(neuron_label_width, text.bounding_rectangle.width)
+                text = self.add_text(neuron.label, y_value=y - self.text_offset)
+                self.neuron_label_width = max(self.neuron_label_width, text.bounding_rectangle.width)
         right_most_neuron_x = 0
         for layer, layer_index in zip(brain.layers, range(len(brain.layers))):
-            x = self.padding + neuron_label_width + border + layer_index * column_width + neuron_radius
+            x = self.padding + self.neuron_label_width + self.border + layer_index * self.column_width + self.neuron_radius
             right_most_neuron_x = max(right_most_neuron_x, x)
             neuron_index = 0
             for neuron in layer:
                 y = row_y_values[neuron_index]
                 max_vertical = max(max_vertical, y)
-                neuron_shape = shapes.Circle((x, y), neuron_radius)
-                neuron_shapes[neuron] = neuron_shape
-                neuron_colour = (150, 150, 150, 0)
-                if neuron.is_bias:
-                    neuron_colour = (50, 50, 50, 0)
-                neuron_graphic = rendering.SimpleMonoColouredGraphic(neuron_shape, neuron_colour)
-                self.organ_graphics.append(neuron_graphic)
+                self.__draw_neuron(neuron, x, y)
+
                 neuron_index += 1
-                # if layer_index == 0 and neuron.label is not None:
-                #     self.neuron_graphics.append(rendering.TextGraphic(neuron.label, rendering.Fonts.arial_font(10), (0, y)))
-        right_label_x = right_most_neuron_x + neuron_radius + border
+        right_label_x = right_most_neuron_x + self.neuron_radius + self.border
         for neuron, neuron_index in zip(brain.output_layer, range(len(brain.output_layer))):
             if neuron.label is not None:
                 y = row_y_values[neuron_index]
-                text = self.add_text(neuron.label, x_value=right_label_x, y_value=y-text_offset)
-                neuron_label_width = max(neuron_label_width, text.bounding_rectangle.width)
+                text = self.add_text(neuron.label, x_value=right_label_x, y_value=y-self.text_offset)
+                self.neuron_label_width = max(self.neuron_label_width, text.bounding_rectangle.width)
                 # label = rendering.TextGraphic(neuron.label, rendering.Fonts.arial_font(10), (right_label_x, y))
                 # self.organ_graphics.append(label)
         for layer, layer_index in zip(brain.layers, range(len(brain.layers))):
             if layer_index + 1 < len(brain.layers):
                 next_layer = brain.layers[layer_index + 1]
                 for neuron in layer:
-                    neuron_shape = neuron_shapes[neuron]
+                    neuron_shape = self.neuron_graphics[neuron].shape
+                    self.synapse_graphics[neuron] = {}
                     for next_neuron in next_layer:
-                        if not next_neuron.is_bias and neuron.has_weight(next_neuron):
-                            next_neuron_shape = neuron_shapes[next_neuron]
+                        if neuron.has_weight(next_neuron):
+                            next_neuron_shape = self.neuron_graphics[next_neuron].shape
                             synapse_shape = shapes.LineSegment(neuron_shape.center, next_neuron_shape.center)
-                            c_value = int(neuron.get_weight(next_neuron) * 200)
-                            r_value = min(max(-c_value, 0), 255)
-                            g_value = min(max(c_value, 0), 255)
-                            synapse_graphic = rendering.SimpleOutlineGraphic(synapse_shape,
-                                                                             (r_value, g_value, 0, 0))
-                            self.organ_graphics.append(synapse_graphic)
+                            synapse_colour = colours.visualise_magnitude(neuron.get_weight(next_neuron) * 0.5)
+                            synapse_graphic = rendering.SimpleOutlineGraphic(synapse_shape, synapse_colour)
+                            self.organ_graphics.insert(0, synapse_graphic)
+                            self.synapse_graphics[neuron][next_neuron] = synapse_graphic
+
         self._set_final_height(self.last_y)
 
+    def toggle_live_view(self):
+        self.live_view = not self.live_view
+        if self.live_view:
+            self.draw_live_view()
+        else:
+            self.draw_static_view()
+        self.refresh_values()
+
+    def refresh_values(self):
+        if self.live_view:
+            self.draw_live_view()
+
+    def redraw(self, neuron_colour, synapse_colour):
+        brain = self.highlighted_organ
+        for layer, layer_index in zip(brain.layers, range(len(brain.layers))):
+            for neuron in layer:
+                neuron_shape = self.neuron_graphics[neuron]
+                neuron_shape.fill_colour = neuron_colour(neuron)
+                if layer_index + 1 < len(brain.layers):
+                    next_layer = brain.layers[layer_index + 1]
+                    for next_neuron in next_layer:
+                        if neuron.has_weight(next_neuron):
+                            synapse_graphic = self.synapse_graphics[neuron][next_neuron]
+                            synapse_graphic.border_colour = synapse_colour(neuron, next_neuron)
+
+    def draw_live_view(self):
+        neuron_colour = lambda n: colours.visualise_magnitude(n.last_amount)
+        synapse_colour = lambda n1, n2: colours.visualise_magnitude((n1.last_amount * n1.get_weight(n2)))
+        self.redraw(neuron_colour, synapse_colour)
+
+    def draw_static_view(self):
+        neuron_colour = lambda n: (50, 50, 50, 0) if n.is_bias else (150, 150, 150, 0)
+        synapse_colour = lambda n1, n2: colours.visualise_magnitude(n1.get_weight(n2) * 0.5)
+        self.redraw(neuron_colour, synapse_colour)
 
 class CreatureHighlight(rendering.ScrollingPane):
     def __init__(self, dimensions, camera=rendering.RelativeCamera()):
         super().__init__(shapes.rect(dimensions), True, False, camera)
-        self.border_width = 1
+        self.border_width = 3
         self.border_colour = (255, 255, 255, 0)
         self.back_ground_colour = (0, 0, 0, 0)
         self.highlighted_creature = None
         self.organ_highlights = []
 
     def highlight(self, creature):
-        if creature is not None:
-            creature.highlight()
-            organ_type_counter = {}
-            organ_type_index = {}
-            for organ in creature.organs:
-                if type(organ) not in organ_type_counter:
-                    organ_type_counter[type(organ)] = 0
-                    organ_type_index[type(organ)] = 1
-                organ_type_counter[type(organ)] += 1
-            if self.highlighted_creature is not None:
-                self.highlight(None)
-            self.highlighted_creature = creature
-            last_y = 0
-            dimensions = self.local_canvas_area.dimensions
-            for organ in creature.organs:
-                if organ_type_counter[type(organ)] > 1:
-                    index = organ_type_index[type(organ)]
-                    organ_type_index[type(organ)] += 1
-                else:
-                    index = 0
-                if type(organ) is Brain:
-                    highlight = BrainHighlight(dimensions, index)
-                elif type(organ) is Body:
-                    highlight = BodyHighlight(dimensions, index)
-                elif type(organ) is Mouth:
-                    highlight = MouthHighlight(dimensions, index)
-                elif type(organ) is EuclideanEye:
-                    highlight = EyeHighlight(dimensions, index)
-                elif type(organ) is Fission:
-                    highlight = FissionHighlight(dimensions, index)
-                elif type(organ) is Legs:
-                    highlight = LegsHighlight(dimensions, index)
-                else:
-                    continue
+        if self.highlighted_creature is not creature:
+            if creature is not None:
+                organ_type_counter = {}
+                organ_type_index = {}
+                for organ in creature.organs:
+                    if type(organ) not in organ_type_counter:
+                        organ_type_counter[type(organ)] = 0
+                        organ_type_index[type(organ)] = 1
+                    organ_type_counter[type(organ)] += 1
+                if self.highlighted_creature is not None:
+                    self.highlight(None)
+                creature.highlight()
+                self.highlighted_creature = creature
+                last_y = 0
+                dimensions = self.local_canvas_area.dimensions
+                for organ in creature.organs:
+                    if organ_type_counter[type(organ)] > 1:
+                        index = organ_type_index[type(organ)]
+                        organ_type_index[type(organ)] += 1
+                    else:
+                        index = 0
+                    if type(organ) is Brain:
+                        highlight = BrainHighlight(dimensions, index)
+                    elif type(organ) is Body:
+                        highlight = BodyHighlight(dimensions, index)
+                    elif type(organ) is Mouth:
+                        highlight = MouthHighlight(dimensions, index)
+                    elif type(organ) is EuclideanEye:
+                        highlight = EyeHighlight(dimensions, index)
+                    elif type(organ) is Fission:
+                        highlight = FissionHighlight(dimensions, index)
+                    elif type(organ) is Legs:
+                        highlight = LegsHighlight(dimensions, index)
+                    else:
+                        continue
 
-                self.pane.add_canvas(highlight, (0, last_y))
-                highlight.highlight(organ)
-                self.organ_highlights.append(highlight)
-                last_y += highlight.local_canvas_area.height
-                if creature.environment is not None:
-                    creature.environment.add_tick_listener(self.refresh_values)
-            self.pane.local_canvas_area.height = last_y
-        else:
-            if self.highlighted_creature is not None:
-                self.highlighted_creature.un_highlight()
-                self.highlighted_creature = None
-            for canvas in self.pane.canvases[:]:
-                self.pane.queue_canvas_for_removal(canvas)
+                    self.pane.add_canvas(highlight, (0, last_y))
+                    highlight.highlight(organ)
+                    self.organ_highlights.append(highlight)
+                    last_y += highlight.local_canvas_area.height
+                    if creature.environment is not None:
+                        creature.environment.add_tick_listener(self.refresh_values)
+                self.pane.local_canvas_area.height = last_y
+            else:
+                if self.highlighted_creature is not None:
+                    self.highlighted_creature.un_highlight()
+                    self.highlighted_creature = None
+                for canvas in self.pane.canvases[:]:
+                    self.pane.queue_canvas_for_removal(canvas)
 
     def refresh_values(self):
         for organ_canvas in self.pane.canvases:
@@ -1055,12 +1113,17 @@ class Neuron:
         self._fire_listeners = []
         self._activation_function = activation_function
         self._summed_input = 0
+        self._last_amount = 0
 
     def __str__(self):
         return self._label if self._label is not None else "neuron"
 
     def __repr__(self):
         return self.__str__()
+
+    @property
+    def last_amount(self):
+        return self._last_amount
 
     @property
     def label(self):
@@ -1089,9 +1152,9 @@ class Neuron:
             target.receive_fire(weight * amount)
 
     def consume(self):
-        amount = self._activation_function(self._summed_input)
+        self._last_amount = self._activation_function(self._summed_input)
         self._summed_input = 0
-        return amount
+        return self._last_amount
 
     def has_weight(self, target_neuron):
         return target_neuron in self._connections
@@ -1584,13 +1647,11 @@ class Body(Organ):
 
     def highlight(self):
         if self.__highlight_graphic is None:
-            print("highlighting creature")
             self.__highlight_graphic = rendering.SimpleOutlineGraphic(self.shape, (255, 0, 0, 0))
             self.creature.environment.register_graphic(self.__highlight_graphic)
 
     def un_highlight(self):
         if self.__highlight_graphic is not None:
-            print("un highlighting creature")
             self.creature.environment.un_register_graphic(self.__highlight_graphic)
             self.__highlight_graphic = None
 
