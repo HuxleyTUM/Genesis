@@ -17,8 +17,8 @@ factor = 1.5
 width = 180 * factor
 height = 120 * factor
 
-init_food_count = int(50 * factor ** 2)
-max_food_count = int(100 * factor ** 2)
+init_food_count = int(30 * factor ** 2)
+max_food_count = int(50 * factor ** 2)
 init_food_mass = 5
 
 init_creature_count = 5
@@ -67,7 +67,6 @@ def place_random_creature(environment):
         r_pos = gen.random_pos(width, height, creature_radius)
         name = str(r.randint(0, 1000000))
         name = "0" * (4 - len(name)) + name
-        # print("Creating " + name + " at " + str(r_pos))
         body = gen.Body(start_mass, shapes.Circle(r_pos, creature_radius))
         brain = gen.Brain()
         legs = gen.Legs()
@@ -122,16 +121,17 @@ def create_master_creature():
 
     has_eaten_hn = brain.hidden_layer[4]
     mouth.has_eaten_neuron.connect_to_neuron(has_eaten_hn, 1)
-    has_eaten_hn.connect_to_neuron(legs.forward_neuron, -0.5)
+    has_eaten_hn.connect_to_neuron(legs.forward_neuron, -0.9)
+    has_eaten_hn.connect_to_neuron(mouth.eat_neuron, 2)
 
     distance_moved_hn = brain.hidden_layer[5]
     legs.distance_moved_neuron.connect_to_neuron(distance_moved_hn, 1)
-    brain.bias_hidden_layer.connect_to_neuron(distance_moved_hn, -1)
+    brain.bias_input_layer.connect_to_neuron(distance_moved_hn, -1)
     distance_moved_hn.connect_to_neuron(legs.turn_clockwise_neuron, 1)
 
     brain.bias_hidden_layer.connect_to_neuron(fission.fission_neuron, -0.7)
     brain.bias_hidden_layer.connect_to_neuron(legs.forward_neuron, 1)
-    brain.bias_hidden_layer.connect_to_neuron(mouth.eat_neuron, 1)
+    brain.bias_hidden_layer.connect_to_neuron(mouth.eat_neuron, 0.1)
 
     r_pos = gen.random_pos(width, height, creature_radius)
     creature.pos = [r_pos[0], r_pos[1]]
@@ -201,7 +201,6 @@ def create_refresh_button():
             dy = (point_outer[1] - point_inner[1])
             y = (point_outer[1] + point_inner[1])/2
     polygon_points = [(5, y), (0, y+5), (0, y-5)]
-    print(polygon_points)
     arrow = shapes.Polygon(polygon_points)
     open_circle = shapes.Polygon(points)
     shape_graphic = rendering.SimpleMonoColouredGraphic(open_circle, (0, 255, 0, 0))
@@ -264,6 +263,7 @@ def create_environment(screen, environment_camera, environment_dimensions, creat
     if active_environment is not None:
         screen.queue_canvas_for_removal(active_environment)
     environment = gen.Environment(environment_camera, environment_dimensions)
+    environment.creature_highlight = creature_highlight
 
     environment.queue_creature(create_master_creature())
     for i in range(init_food_count):
@@ -271,26 +271,13 @@ def create_environment(screen, environment_camera, environment_dimensions, creat
     # for i in range(min_creature_count):
     #     place_random_creature(environment)
 
-    environment.add_tick_listener(functools.partial(food_listener, environment))
-    environment.add_tick_listener(functools.partial(create_number_listener, environment))
+    environment.tick_listeners.append(functools.partial(food_listener, environment))
+    environment.tick_listeners.append(functools.partial(create_number_listener, environment))
     screen.add_canvas(environment, (0, task_bar_height), 0)
     active_environment = environment
     renderer.render_clock = environment.clocks[gen.RENDER_KEY]
     renderer.thread_render_clock = environment.clocks[gen.RENDER_THREAD_KEY]
     manager._physics = environment.tick
-
-    def process_click(event):
-        found_creature = False
-        local_point = environment.transform_point_from_screen(event.screen_mouse_position)
-        for creature in environment.living_creatures:
-            if creature.body.shape.point_lies_within(local_point):
-                creature_highlight.highlight(creature)
-                found_creature = True
-                break
-        if not found_creature:
-            creature_highlight.highlight(None)
-
-    environment.mouse_pressed_event_listeners.append(process_click)
 
 
 def start(environment_dimensions):

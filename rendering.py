@@ -8,6 +8,7 @@ import pygame
 import functools
 import events
 import colours
+import numbers
 
 
 render_lock = threading.Lock()
@@ -99,10 +100,11 @@ class TextGraphic(Graphic):
 
     @text.setter
     def text(self, text):
-        self.__text = text
-        self.__bounding_rectangle.dimensions = self.font.size(text)
-        self.pyg_label = self.font.render(self.__text, 1, self.__text_colour)
-        self.notify_listeners_of_change()
+        if text is not self.__text:
+            self.__text = text
+            self.__bounding_rectangle.dimensions = self.font.size(text)
+            self.pyg_label = self.font.render(self.__text, 1, self.__text_colour)
+            self.notify_listeners_of_change()
 
     @property
     def is_visible(self):
@@ -471,6 +473,7 @@ class Canvas:
         self._graphics_listeners = {}
         self.graphics_registered_listeners = []
         self.graphics_un_registered_listeners = []
+        self.redraw_listeners = []
         self.__canvases = []
         self.mouse_pressed_event_listeners = []
         self.mouse_released_event_listeners = []
@@ -561,7 +564,7 @@ class Canvas:
 
     @property
     def local_bounding_rectangle(self):
-        return shapes.Rectangle(0, 0, self.local_canvas_area.left, self.local_canvas_area.down)
+        return shapes.Rectangle(0, 0, self.local_canvas_area.width, self.local_canvas_area.height)
 
     def transform_point_from_screen(self, point):
         if self.parent_canvas is None:
@@ -626,6 +629,8 @@ class Canvas:
         self.canvases_to_remove.append(canvas)
 
     def _remove_canvas(self, canvas):
+        for listener in self.screen.redraw_listeners:
+            listener(canvas.global_canvas_area.to_bounding_box())
         canvas.parent_canvas = None
         canvas.position_in_parent = None
         self.__canvases.remove(canvas)
@@ -853,10 +858,43 @@ class Table(SimpleCanvas):
         return len(self.row_graphics)
 
 
+class ValueDisplay(Table):
+    def __init__(self, font_size, text_colour, precision=2):
+        super().__init__(font_size, text_colour, 2)
+        self.precision = precision
+        self.value_updaters = []
+
+    def add_row(self, row_text):
+        val = row_text[1]
+        if callable(val):
+            self.value_updaters.append((self.row_count, row_text[1]))
+            val = row_text[1]()
+        Table.add_row(self, (row_text[0], self.__clean_input(val)))
+
+    def refresh_values(self):
+        for value_updater in self.value_updaters:
+            self.set(1, value_updater[0], self.__clean_input(value_updater[1]()))
+
+    def set(self, x, y, text):
+        Table.set(self, x, y, self.__clean_input(text))
+
+    def __clean_input(self, val_input):
+        val_input = self.__clean_value(val_input)
+        if not isinstance(val_input, str) and hasattr(val_input, "__getitem__"):
+            val_input = [self.__clean_value(x) for x in val_input]
+        return str(val_input)
+
+    def __clean_value(self, value):
+        if isinstance(value, numbers.Number):
+            return round(value, self.precision)
+        return value
+
+
 class ScrollingPane(SimpleCanvas):
     def __init__(self, local_canvas_area, scroll_vertically, scroll_horizontally, camera=RelativeCamera()):
         super().__init__(local_canvas_area, camera)
         self.pane = SimpleCanvas(copy.copy(local_canvas_area))
+
         self.add_canvas(self.pane)
         self.scroll_horizontally = scroll_horizontally
         self.scroll_vertically = scroll_vertically
@@ -913,7 +951,6 @@ class Button(SimpleCanvas):
             self.back_ground_colour = colours.adjust_colour(self.back_ground_colour, colour_factor)
 
     def __mouse_canceled(self, event):
-        print("canceled!")
         if self.is_pressed:
             self.is_pressed = False
             self._adjust_colour()
@@ -1069,6 +1106,7 @@ class PyGameRenderer(Renderer):
         super().__init__()
         self.screen = screen
         self.screen.graphics_un_registered_listeners.append(self.un_registered_graphic)
+        self.screen.redraw_listeners.append(self.redraw_screen_area)
         self.thread_render_clock = thread_render_clock
         self.render_clock = render_clock
         self._last_render_time = -1
@@ -1082,10 +1120,15 @@ class PyGameRenderer(Renderer):
         self.redraw_canvas(self.screen)
 
     def un_registered_graphic(self, graphic_info):
-        self.screen_boxes_to_update.append(graphic_info.last_rect_rendered)
+        if graphic_info.last_rect_rendered is not None:
+            self.screen_boxes_to_update.append(graphic_info.last_rect_rendered)
+
+    def redraw_screen_area(self, box):
+        self.screen_boxes_to_update.append(box)
 
     def redraw_canvas(self, canvas):
-        self.screen_boxes_to_update.append(canvas.global_canvas_area.to_bounding_box())
+        canvas.redraw_whole_screen = True
+        # self.screen_boxes_to_update.append(canvas.global_canvas_area.to_bounding_box())
 
     def render(self):
         if self.render_clock is not None:
@@ -1189,7 +1232,10 @@ class PyGameRenderer(Renderer):
                     graphic_info.last_rect_rendered = drawn_bounding
                 graphic_info.changed_since_render = False
         for sub_canvas in canvas.canvases:
-            self.render_canvas(sub_canvas, dirty_rectangles)
+            if redrawing_whole_canvas:
+                self.render_canvas(sub_canvas, [])
+            else:
+                self.render_canvas(sub_canvas, dirty_rectangles)
         for canvas_to_remove in canvas.canvases_to_remove:
             canvas._remove_canvas(canvas_to_remove)
         canvas.redraw_all_graphics = False

@@ -42,7 +42,6 @@ class EventManager:
                     if pyg_event.button == 1:
                         active_canvas.mouse_pressed(event)
                         if event.consumed:
-                            print(type(active_canvas))
                             self.mouse_released_canvas = active_canvas
                     elif pyg_event.button == 4:
                         active_canvas.mouse_wheel_scrolled_up(event)
@@ -64,11 +63,6 @@ class EventManager:
                         active_canvas.down_key_pressed(event)
                 if event.consumed:
                     break
-            if pyg_event.type == pygame.MOUSEBUTTONUP:
-                print(pyg_event.type == pygame.MOUSEBUTTONUP)
-                print(self.mouse_released_canvas is not None)
-                print(pyg_event.button == 1)
-                print(type(self.mouse_released_canvas))
             if pyg_event.type == pygame.MOUSEBUTTONUP and \
                     self.mouse_released_canvas is not None and \
                     pyg_event.button == 1:

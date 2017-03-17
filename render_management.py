@@ -37,7 +37,6 @@ class Manager:
     @pps.setter
     def pps(self, value):
         self._physics_delta = 1/value
-        print(self._physics_delta)
 
     @property
     def paused(self):

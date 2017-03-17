@@ -70,7 +70,7 @@ class OrganHighlight(rendering.SimpleCanvas):
     def __init__(self, dimensions, header_text, organ_count, header_size=18, padding=6,
                  camera=rendering.RelativeCamera()):
         super().__init__(shapes.rect(dimensions), camera)
-        self.table = rendering.Table(10, colours.rgb(255), 2)
+        self.table = rendering.ValueDisplay(10, colours.rgb(255))
         # self.table.add_row("tick cost", 0)
         self.header_text = header_text
         self.organ_graphics = []
@@ -151,7 +151,7 @@ class OrganHighlight(rendering.SimpleCanvas):
         pass
 
     def refresh_values(self):
-        pass
+        self.table.refresh_values()
 
 
 class MouthHighlight(OrganHighlight):
@@ -159,13 +159,10 @@ class MouthHighlight(OrganHighlight):
         super().__init__(dimensions, "Mouth", organ_count, camera=camera)
 
     def visualize(self, mouth):
-        labels = ["body distance", "rotation", "mouth_radius", "food capacity", "total amount eaten"]
-        values = [mouth.body_distance, mouth.rotation, mouth.mouth_radius, mouth.food_capacity,
-                  self.highlighted_organ.total_amount_eaten]
+        labels = ["body distance", "rotation", "mouth_radius", "food capacity"]
+        values = [mouth.body_distance, mouth.rotation, mouth.mouth_radius, mouth.food_capacity]
         self.table.add_rows(zip(labels, values))
-
-    def refresh_values(self):
-        self.table.set(1, 4, str(self.highlighted_organ.total_amount_eaten))
+        self.table.add_row(("total amount eaten", lambda: self.highlighted_organ.total_amount_eaten))
 
 
 class LegsHighlight(OrganHighlight):
@@ -173,12 +170,9 @@ class LegsHighlight(OrganHighlight):
         super().__init__(dimensions, "Legs", organ_count, camera=camera)
 
     def visualize(self, legs):
-        labels = ["max travel distance", "max degrees turn", "total distance traveled"]
-        values = [legs.max_distance, legs.max_degree_turn, legs.total_distance_moved]
-        self.table.add_rows(zip(labels, values))
-
-    def refresh_values(self):
-        self.table.set(1, 2,  str(self.highlighted_organ.total_distance_moved))
+        self.table.add_row(("max travel distance", legs.max_distance))
+        self.table.add_row(("max degrees turn", legs.max_degree_turn))
+        self.table.add_row(("total distance traveled", lambda: legs.total_distance_moved))
 
 
 class FissionHighlight(OrganHighlight):
@@ -186,12 +180,7 @@ class FissionHighlight(OrganHighlight):
         super().__init__(dimensions, "Fission", organ_count, camera=camera)
 
     def visualize(self, fission):
-        labels = ["offsprings produced"]
-        values = [fission.offsprings_produced]
-        self.table.add_rows(zip(labels, values))
-
-    def refresh_values(self):
-        self.table.set(1, 0,  str(self.highlighted_organ.offsprings_produced))
+        self.table.add_row(("offsprings produced", lambda: self.highlighted_organ.offsprings_produced))
 
 
 class BodyHighlight(OrganHighlight):
@@ -199,17 +188,9 @@ class BodyHighlight(OrganHighlight):
         super().__init__(dimensions, "Body", organ_count, camera=camera)
 
     def visualize(self, body):
-        labels = ["is alive", "mass", "age", "rotation", "position"]
-        values = ["yes" if body.creature.alive else "no", body.mass, body.age, body.rotation, body.center]
-        self.table.add_rows(zip(labels, values))
-
-
-    def refresh_values(self):
-        self.table.set(1, 0,  "yes" if self.highlighted_organ.creature.alive else "no")
-        self.table.set(1, 1,  str(self.highlighted_organ.mass))
-        self.table.set(1, 2,  str(self.highlighted_organ.age))
-        self.table.set(1, 3,  str(self.highlighted_organ.rotation))
-        self.table.set(1, 4,  str(self.highlighted_organ.center))
+        self.table.add_row(("mass", lambda: self.highlighted_organ.mass))
+        self.table.add_row(("rotation", lambda: self.highlighted_organ.rotation))
+        self.table.add_row(("position", lambda: self.highlighted_organ.center))
 
 
 class EyeHighlight(OrganHighlight):
@@ -217,12 +198,12 @@ class EyeHighlight(OrganHighlight):
         super().__init__(dimensions, "Eye", organ_count, camera=camera)
 
     def visualize(self, eye):
-        labels = ["body distance", "rotation", "radius", "food_spotted"]
-        values = [eye.body_distance,  eye.rotation, eye.radius, eye.food_pellets_spotted_count]
+        labels = ["body distance", "rotation", "radius", "food spotted"]
+        values = [eye.body_distance,  eye.rotation, eye.radius, lambda: eye.food_pellets_spotted_count]
         self.table.add_rows(zip(labels, values))
 
-    def refresh_values(self):
-        self.table.set(1, 3,  str(self.highlighted_organ.food_pellets_spotted_count))
+    # def refresh_values(self):
+    #     self.table.set(1, 3,  str(self.highlighted_organ.food_pellets_spotted_count))
 
 
 def get_graph_points(activation_function, input_range, scalar, offset, x_steps):
@@ -344,7 +325,6 @@ class BrainHighlight(OrganHighlight):
                                 synapse_graphic.border_colour = synapse_colour
                             else:
                                 synapse_graphic.is_visible = False
-                                synapse_graphic.border_colour = (0, 255, 255, 0)
 
     def draw_live_view(self):
         neuron_colour = lambda n: colours.visualise_magnitude(n.last_amount)
@@ -352,23 +332,33 @@ class BrainHighlight(OrganHighlight):
         self.redraw(neuron_colour, synapse_colour)
 
     def draw_static_view(self):
-        neuron_colour = lambda n: (50, 50, 50, 0) if n.is_bias else (150, 150, 150, 0)
+        neuron_colour = lambda n: colours.rgb(50) if n.is_bias else colours.rgb(150)
         synapse_colour = lambda n1, n2: colours.visualise_magnitude(n1.get_weight(n2) * 0.5)
         self.redraw(neuron_colour, synapse_colour)
 
 
 class CreatureHighlight(rendering.ScrollingPane):
-    def __init__(self, dimensions, camera=rendering.RelativeCamera()):
+    def __init__(self, dimensions, camera=rendering.RelativeCamera(), padding=5, header_size=18):
         super().__init__(shapes.rect(dimensions), True, False, camera)
         self.border_width = 3
-        self.border_colour = (255, 255, 255, 0)
-        self.back_ground_colour = (0, 0, 0, 0)
+        self.border_colour = colours.WHITE
+        self.back_ground_colour = colours.BLACK
         self.highlighted_creature = None
         self.organ_highlights = []
+        self.padding = padding
+        self.last_y = self.padding
+        self.header_label = rendering.TextGraphic("Creature", rendering.Fonts.arial_font(header_size))
+        self.pane.register_graphic(self.header_label)
+        self.header_label.position = (padding, self.last_y)
+        self.last_y += self.header_label.bounding_rectangle.height
+        self.initial_y = self.last_y
+        self.table = None
 
     def highlight(self, creature):
         if self.highlighted_creature is not creature:
             if creature is not None:
+                self.last_y = self.initial_y
+
                 organ_type_counter = {}
                 organ_type_index = {}
                 for organ in creature.organs:
@@ -378,9 +368,15 @@ class CreatureHighlight(rendering.ScrollingPane):
                     organ_type_counter[type(organ)] += 1
                 if self.highlighted_creature is not None:
                     self.highlight(None)
+                self.table = rendering.ValueDisplay(10, colours.WHITE)
+                self.organ_highlights.append(self.table)
+                self.table.add_row(("generation", creature.generation))
+                self.table.add_row(("is alive", lambda: "yes" if creature.alive else "no"))
+                self.table.add_row(("age", lambda: creature.age))
+                self.pane.add_canvas(self.table, (self.padding, self.last_y + self.padding))
+                self.last_y += self.table.local_canvas_area.height + self.padding
                 creature.highlight()
                 self.highlighted_creature = creature
-                last_y = 0
                 dimensions = self.local_canvas_area.dimensions
                 for organ in creature.organs:
                     if organ_type_counter[type(organ)] > 1:
@@ -403,25 +399,31 @@ class CreatureHighlight(rendering.ScrollingPane):
                     else:
                         continue
 
-                    self.pane.add_canvas(highlight, (0, last_y))
+                    self.pane.add_canvas(highlight, (0, self.last_y))
                     highlight.highlight(organ)
                     highlight.table.add_row(("tick cost", organ.tick_cost))
                     self.organ_highlights.append(highlight)
-                    last_y += highlight.local_canvas_area.height
-                    if creature.environment is not None:
-                        creature.environment.add_tick_listener(self.refresh_values)
-                self.pane.local_canvas_area.height = last_y
+                    self.last_y += highlight.local_canvas_area.height
+                if creature.environment is not None:
+                    creature.environment.tick_listeners.append(self.refresh_values)
+                self.pane.local_canvas_area.height = self.last_y
             else:
                 if self.highlighted_creature is not None:
+                    if self.highlighted_creature.environment is not None:
+                        self.highlighted_creature.environment.tick_listeners.remove(self.refresh_values)
                     self.highlighted_creature.un_highlight()
                     self.highlighted_creature = None
-                for canvas in self.pane.canvases[:]:
-                    self.pane.queue_canvas_for_removal(canvas)
+                    # self.pane.queue_canvas_for_removal(self.table)
+                    for canvas in self.pane.canvases[:]:
+                        self.pane.queue_canvas_for_removal(canvas)
+                    self.table = None
 
     def refresh_values(self):
-        for highlight in self.pane.canvases:
-            highlight.table.set(1, highlight.table.row_count-1, highlight.highlighted_organ.tick_cost)
-            highlight.refresh_values()
+        if self.table is not None:
+            self.table.refresh_values()
+            for highlight in self.pane.canvases:
+                if isinstance(highlight, OrganHighlight):
+                    highlight.refresh_values()
 
 
 class Environment(rendering.SimpleCanvas):
@@ -448,11 +450,32 @@ class Environment(rendering.SimpleCanvas):
         self.__food_tree = binary_tree.BinaryTree(local_dimensions, 6)
         # self.__dimensions = local_dimensions
         self.__queued_creatures = []
-        self.__tick_listeners = []
+        self.tick_listeners = []
         self.__last_tick_time = -1
         self.__last_tick_delta = -1
+        self.__creature_highlight = None
         self.clocks = ClockTower([Clock(FOOD_COLLISION_KEY), Clock(TICK_KEY), Clock(THINKING_KEY), Clock(RENDER_KEY),
                                  Clock(FOOD_RECLASSIFICATION_KEY), Clock(RENDER_THREAD_KEY)])
+
+    @property
+    def creature_highlight(self):
+        return self.__creature_highlight
+
+    @creature_highlight.setter
+    def creature_highlight(self, creature_highlight):
+        if self.__creature_highlight is not creature_highlight:
+            self.__creature_highlight = creature_highlight
+            def click_listener(event):
+                found_creature = False
+                local_point = self.transform_point_from_screen(event.screen_mouse_position)
+                for creature in self.living_creatures:
+                    if creature.body.shape.point_lies_within(local_point):
+                        creature_highlight.highlight(creature)
+                        found_creature = True
+                        break
+                if not found_creature:
+                    creature_highlight.highlight(None)
+            self.mouse_pressed_event_listeners.append(click_listener)
 
     # @property
     # def canvas(self):
@@ -488,9 +511,6 @@ class Environment(rendering.SimpleCanvas):
     @property
     def tick_count(self):
         return self.__tick_count
-
-    def add_tick_listener(self, tick_listener):
-        self.__tick_listeners.append(tick_listener)
 
     @property
     def creatures(self):
@@ -569,7 +589,7 @@ class Environment(rendering.SimpleCanvas):
         for creature in self.__living_creatures[:]:
             creature.execute()
         self.__tick_count += 1
-        for listener in self.__tick_listeners:
+        for listener in self.tick_listeners:
             listener()
         current_time = time.time()
         self.__last_tick_delta = current_time - self.__last_tick_time
@@ -758,10 +778,11 @@ class Creature(StageObject):
     A Creatures position and orientation are stored in and managed by the body, which is accessible via get_body().
 
     A Creatures brain is accessible via get_brain()."""
-    def __init__(self, body, name=None):
+    def __init__(self, body, name=None, generation=0):
         super().__init__()
         self.__organs = []
         self.__body = body
+        self.generation = generation
         body.mass_listeners.append(self.__register_mass)
         body.position_listeners.append(self.__notify_position_listeners)
         body.rotation_listeners.append(self.__notify_rotation_listeners)
@@ -1265,7 +1286,7 @@ class Brain(Organ):
             to_layer_other = other_brain.layers[layer_index+1]
             for from_neuron_this, from_neuron_other in zip(from_layer_this, from_layer_other):
                 for to_neuron_this, to_neuron_other in zip(to_layer_this, to_layer_other):
-                    if to_neuron_this.has_weight(to_neuron_other):
+                    if from_neuron_other.has_weight(to_neuron_other):
                         weight = from_neuron_other.get_weight(to_neuron_other)
                         from_neuron_this.connect_to_neuron(to_neuron_this, weight)
 
@@ -1555,7 +1576,7 @@ class Mouth(Organ):
 
     @property
     def tick_cost(self):
-        return self.body_distance / 100 + self.mouth_radius ** 2 / 40 + self.food_capacity / 40
+        return self.body_distance / 100 + self.mouth_radius ** 2 / 10 + self.food_capacity / 60
         # G todo: replace with realistic tick cost -> use mouth area and not just radius!
 
     @property
@@ -1890,6 +1911,7 @@ class Fission(Organ):
                 split_creature.body.rotation = random.random()*360
 
                 split_creature.__name = creature.name + "+"
+                split_creature.generation = creature.generation + 1
 
                 split_creature.mutate(self.mutation_model)
                 self.offsprings_produced += 1
