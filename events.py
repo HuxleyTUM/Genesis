@@ -1,4 +1,6 @@
 import pygame
+import objgraph
+import gc
 
 
 def fire_listeners(listeners, event):
@@ -61,6 +63,14 @@ class EventManager:
                         active_canvas.up_key_pressed(event)
                     elif pyg_event.key == pygame.K_DOWN:
                         active_canvas.down_key_pressed(event)
+                    elif pyg_event.key == pygame.K_0:
+                        gc.collect()
+                        print("\nprinting most common types..")
+                        objgraph.show_most_common_types(limit=10)
+                    #     x = []
+                    #     y = [x, [x], dict(x=x)]
+                    #     gc.collect()
+                    #     objgraph.show_refs([y])
                 if event.consumed:
                     break
             if pyg_event.type == pygame.MOUSEBUTTONUP and \

@@ -444,7 +444,7 @@ class Environment(rendering.SimpleCanvas):
         # self.__canvas_dimensions = local_dimensions
         self.__tick_count = 0
         self.__stage_objects = []
-        self.__creatures = []
+        # self.__creatures = []
         self.__living_creatures = []
         # self.__food_pellets = set()
         self.__food_tree = binary_tree.BinaryTree(local_dimensions, 6)
@@ -566,6 +566,12 @@ class Environment(rendering.SimpleCanvas):
 
     def tick(self):
         """As an Environment has no real sense of time, this method must be called periodically from the outside."""
+        # if self.__tick_count % 50 == 0:
+        #     print("environment objects..")
+        #     print("\t"+str(len(self.living_creatures)))
+        #     print("\t"+str(len(self.stage_objects)))
+        #     print("\t"+str(len(self.tick_listeners)))
+        #     print("\t"+str(len(self.__queued_creatures)))
         tick_clock = self.clocks[TICK_KEY]
         tick_clock.tick()
         for food in self.food_tree.elements:
@@ -577,7 +583,7 @@ class Environment(rendering.SimpleCanvas):
         for creature in self.__queued_creatures:
             if creature.alive:
                 self.__living_creatures.append(creature)
-                self.__creatures.append(creature)
+                # self.__creatures.append(creature)
                 self.__add_stage_object(creature)
                 # self.__stage_objects.append(creature)
                 # creature.environment = self
@@ -943,7 +949,7 @@ class Creature(StageObject):
         # G todo: remove variable _existing
         return cloned_creature
 
-    def mutate(self, mutation_model):
+    def mutate(self, mutation_model, new_organ_mutation):
         if random.random() < mutation_model.mutation_likelihood:
             new_organ = None
             if random.random() < 0.5:
@@ -952,8 +958,8 @@ class Creature(StageObject):
                 new_organ = EuclideanEye(random_from_interval(0.1, 30),
                                          random_from_interval(-10, 10),
                                          random_from_interval(0.1, 20))
-            self.add_organ(new_organ, mutation_model)
-            new_organ.mutate(mutation_model)
+            self.add_organ(new_organ, new_organ_mutation)
+            new_organ.mutate(new_organ_mutation)
         if random.random() < mutation_model.mutation_likelihood:
             random_organ = self.__organs[random.randrange(0, len(self.__organs))]
             if random_organ is not self.__brain and random_organ is not self.__body:
@@ -1576,7 +1582,7 @@ class Mouth(Organ):
 
     @property
     def tick_cost(self):
-        return self.body_distance / 100 + self.mouth_radius ** 2 / 10 + self.food_capacity / 60
+        return self.body_distance / 100 + self.mouth_radius / 10 + self.food_capacity / 60
         # G todo: replace with realistic tick cost -> use mouth area and not just radius!
 
     @property
@@ -1887,15 +1893,16 @@ class Fission(Organ):
     # G expensive. if more than one offspring possible, this class needs to be renamed.
     # G also another parameter could be how much mass remains with the original creature and how much is
     # G transferred to the "offsprings"..
-    def __init__(self, mutation_model):
+    def __init__(self, mutation_model, new_mutation_model):
         super().__init__("fission")
+        self.new_mutation_model = new_mutation_model
         self.mutation_model = mutation_model
         self.__fission_neuron = OutputNeuron("fission: fission")
         self.register_output_neuron(self.__fission_neuron)
         self.offsprings_produced = 0
 
     def clone(self):
-        return Fission(copy.deepcopy(self.mutation_model))
+        return Fission(copy.deepcopy(self.mutation_model), copy.deepcopy(self.new_mutation_model))
 
     def execute(self):
         fission_value = self.__fission_neuron.consume()
@@ -1913,7 +1920,7 @@ class Fission(Organ):
                 split_creature.__name = creature.name + "+"
                 split_creature.generation = creature.generation + 1
 
-                split_creature.mutate(self.mutation_model)
+                split_creature.mutate(self.mutation_model, self.new_mutation_model)
                 self.offsprings_produced += 1
                 if split_creature.alive:
                     environment.queue_creature(split_creature)

@@ -18,7 +18,7 @@ width = 180 * factor
 height = 120 * factor
 
 init_food_count = int(30 * factor ** 2)
-max_food_count = int(50 * factor ** 2)
+max_food_count = int(80 * factor ** 2)
 init_food_mass = 5
 
 init_creature_count = 5
@@ -71,7 +71,7 @@ def place_random_creature(environment):
         brain = gen.Brain()
         legs = gen.Legs()
         mouth = gen.Mouth(3, 0)
-        fission = gen.Fission(mutation_model)
+        fission = gen.Fission(mutation_model, init_mutation_model)
 
         creature = gen.Creature(body, name)
         creature.add_organ(brain)
@@ -265,11 +265,9 @@ def create_environment(screen, environment_camera, environment_dimensions, creat
     environment = gen.Environment(environment_camera, environment_dimensions)
     environment.creature_highlight = creature_highlight
 
-    environment.queue_creature(create_master_creature())
+    # environment.queue_creature(create_master_creature())
     for i in range(init_food_count):
         place_random_food(environment)
-    # for i in range(min_creature_count):
-    #     place_random_creature(environment)
 
     environment.tick_listeners.append(functools.partial(food_listener, environment))
     environment.tick_listeners.append(functools.partial(create_number_listener, environment))
