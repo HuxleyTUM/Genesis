@@ -4,25 +4,42 @@ import shapes
 
 class BinaryTree:
     def __init__(self, dimension, depth):
-        self.dimension = dimension
-        self.root_node = self.divide((0, 0), dimension, 0, depth)
+        self.true_dimension = dimension
+        dim = (2**int((depth+1)/2), 2**int(depth/2))
+        if dimension[0] > dimension[1]:
+            self.tree_dimension = dim
+        else:
+            self.tree_dimension = dim[::-1]
+        self.conversion = [x/y for x, y in zip(self.true_dimension, self.tree_dimension)]
+        self.leaves = [None for x in range(dim[0] * dim[1])]
+        self.root_node = self.divide((0, 0), self.tree_dimension, 0, depth)
+        for leaf in self.leaves:
+            leaf.find_neighbours()
         self.elements_to_leaves = {}
 
-    def divide(self, pos, dimensions, current_depth, to_depth):
+    def tree_to_true_position(self, position):
+        return [x*y for x, y in zip(position, self.conversion)]
+
+    def divide(self, tree_pos, tree_dimension, current_depth, to_depth):
         if current_depth < to_depth:
-            split_dimension = 1 if dimensions[0] > dimensions[1] else 0
+            split_dimension = 1 if tree_dimension[0] > tree_dimension[1] else 0
             other_dimension = (split_dimension + 1) % 2
-            next_dimensions = [dimensions[0], dimensions[1]]
+            next_dimensions = [tree_dimension[0], tree_dimension[1]]
             next_dimensions[other_dimension] /= 2
-            right_pos = [pos[0], pos[1]]
-            right_pos[other_dimension] += next_dimensions[other_dimension]
-            left = self.divide(pos, next_dimensions, current_depth + 1, to_depth)
-            right = self.divide(right_pos, next_dimensions, current_depth + 1, to_depth)
-            axis = shapes.Axis(right_pos[other_dimension], split_dimension)
-            node = Node(axis, left, right)
+            higher_pos = [tree_pos[0], tree_pos[1]]
+            higher_pos[other_dimension] += next_dimensions[other_dimension]
+            lower = self.divide(tree_pos, next_dimensions, current_depth + 1, to_depth)
+            higher = self.divide(higher_pos, next_dimensions, current_depth + 1, to_depth)
+            true_position = self.tree_to_true_position(higher_pos)
+            axis = shapes.Axis(true_position[other_dimension], split_dimension)
+            node = Node(axis, lower, higher)
             return node
         else:
-            return Leaf()
+            true_pos = self.tree_to_true_position(tree_pos)
+            true_dim = self.tree_to_true_position(tree_dimension)
+            leaf = Leaf(self, tree_pos, shapes.Rectangle(true_pos[0], true_pos[1], true_dim[0], true_dim[1]))
+            self.leaves[int(tree_pos[0] + tree_pos[1] * self.tree_dimension[0])] = leaf
+            return leaf
 
     def classify(self, element, shape):
         leaves = self.root_node.find_leaves(shape)
@@ -31,7 +48,35 @@ class BinaryTree:
             leaf.elements.add(element)
 
     def reclassify(self, element, shape):
-        leaves = self.root_node.find_leaves(shape)
+        # leaf_set = self.elements_to_leaves[element]
+        # candidates = []
+        # leafs_to_remove = set()
+        # for leaf in leaf_set:
+        #     h_contained = 0
+        #     v_contained = 0
+        #     if shape.left > leaf.bounding_rectangle.right:
+        #         leafs_to_remove.add(leaf)
+        #         continue
+        #     if shape.right > leaf.bounding_rectangle.left:
+        #         leafs_to_remove.add(leaf)
+        #         continue
+        #
+        #
+        #     if False:
+        #         self.__add_leaf(leaf.left, leaf_list, leaf_set)
+        #         h_contained += 1
+        #     if shape.right > leaf.bounding_rectangle.right:
+        #         self.__add_leaf(leaf.right, leaf_list, leaf_set)
+        #         h_contained += 1
+        #     if shape.down < leaf.bounding_rectangle.down:
+        #         self.__add_leaf(leaf.down, leaf_list, leaf_set)
+        #         v_contained += 1
+        #     if shape.up > leaf.bounding_rectangle.up:
+        #         self.__add_leaf(leaf.up, leaf_list, leaf_set)
+        #         v_contained += 1
+
+        leaves = set()
+        self.root_node._find_leaves(shape, leaves)
         old_leaves = self.elements_to_leaves[element]
         update_mapping = False
         for leaf in old_leaves - leaves:
@@ -42,6 +87,11 @@ class BinaryTree:
             update_mapping = True
         if update_mapping:
             self.elements_to_leaves[element] = leaves
+    
+    def __add_leaf(self, leaf, leaf_list, leaf_set):
+        if leaf is not None and leaf not in leaf_set:
+            leaf_set.add(leaf)
+            leaf_list.append(leaf)
 
     def contains(self, element, shape):
         return element in self.elements_to_leaves
@@ -71,40 +121,57 @@ class BinaryTree:
 
 
 class Node:
-    def __init__(self, axis, left, right):
+    def __init__(self, axis, lower, higher):
         self.axis = axis
-        self.left = left
-        self.right = right
+        self.lower = lower
+        self.higher = higher
+
+        self.parent = None
 
     @property
     def size(self):
-        return self.left.size + self.right.size
+        return self.lower.size + self.higher.size
 
     def find_leaves(self, shape, leaves=None):
         if leaves is None:
             leaves = set()
-        if self.axis.collides(shape):
-            leaves |= self.left.find_leaves(shape, leaves)
-            leaves |= self.right.find_leaves(shape, leaves)
-        else:
-            pos = shape.center
-            if pos[(self.axis.dimension+1) % 2] < self.axis.offset:
-                leaves |= self.left.find_leaves(shape, leaves)
-            else:
-                leaves |= self.right.find_leaves(shape, leaves)
+        self._find_leaves(shape, leaves)
         return leaves
+
+    def _find_leaves(self, shape, leaves):
+        if self.axis.dimension == 0:
+            lower = shape.down < self.axis.offset
+            higher = shape.up > self.axis.offset
+        else:
+            lower = shape.left < self.axis.offset
+            higher = shape.right > self.axis.offset
+        if lower:
+            self.lower._find_leaves(shape, leaves)
+        if higher:
+            self.higher._find_leaves(shape, leaves)
 
     def merge(self, merge_into=None):
         if merge_into is None:
             merge_into = set()
-        merge_into |= self.left.merge()
-        merge_into |= self.right.merge()
+        self._merge(merge_into)
         return merge_into
+
+    def _merge(self, merge_into):
+        self.lower._merge(merge_into)
+        self.higher._merge(merge_into)
 
 
 class Leaf:
-    def __init__(self):
+    def __init__(self, tree, tree_pos, bounding_rectangle):
+        self.bounding_rectangle = bounding_rectangle
+        self.x = int(tree_pos[0])
+        self.y = int(tree_pos[1])
+        self.tree = tree
         self.elements = set()
+        self.left = None
+        self.right = None
+        self.down = None
+        self.up = None
 
     @property
     def size(self):
@@ -113,11 +180,18 @@ class Leaf:
     def find_node(self, shape=None):
         return self
 
+    def _merge(self, merge_into):
+        merge_into |= self.elements
+
     def merge(self, merge_into=None):
         if merge_into is None:
-            merge_into = set()
-        merge_into |= self.elements
-        return self.elements
+            merge_into = set(self.elements)
+        else:
+            merge_into |= self.elements
+        return merge_into
+
+    def _find_leaves(self, shape, leaves):
+        leaves.add(self)
 
     def find_leaves(self, shape, leaves=None):
         if leaves is None:
@@ -125,4 +199,16 @@ class Leaf:
         else:
             leaves.add(self)
         return leaves
+    
+    def find_neighbours(self):
+        self.left = self.find_neighbour(self.x-1, self.y)
+        self.right = self.find_neighbour(self.x+1, self.y)
+        self.down = self.find_neighbour(self.x, self.y-1)
+        self.up = self.find_neighbour(self.x, self.y+1)
+
+    def find_neighbour(self, x, y):
+        if 0 > x or x >= self.tree.tree_dimension[0] or 0 > y or y >= self.tree.tree_dimension[1]:
+            return None
+        return self.tree.leaves[int(x + y * self.tree.tree_dimension[0])]
+    
 

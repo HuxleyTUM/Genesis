@@ -22,6 +22,7 @@ FOOD_RECLASSIFICATION_KEY = "food reclassification"
 
 MIN_FOOD_MASS_TO_CONSUME = 0.05
 FOOD_GROWTH_RATE = 0.4
+FOOD_GROWTH_DELAY = 10
 MAX_CREATURE_AGE = 250
 MAX_FOOD_MASS = 100
 
@@ -241,9 +242,8 @@ class BrainHighlight(OrganHighlight):
         self.neuron_graphics[neuron] = neuron_circle
         scaling = (self.neuron_radius / 2, -self.neuron_radius / 2)
         points = get_graph_points(neuron._activation_function, (-2, 2), scaling, (x, y), 0.2)
-        for i in range(len(points)-1):
-            line = shapes.LineSegment(points[i], points[i + 1])
-            self.organ_graphics.append(rendering.SimpleOutlineGraphic(line, (255, 255, 255)))
+        lines = shapes.PointLine(points)
+        self.organ_graphics.append(rendering.SimpleOutlineGraphic(lines, colours.WHITE))
 
     def visualize(self, brain):
         max_vertical = self.last_y
@@ -578,7 +578,9 @@ class Environment(rendering.SimpleCanvas):
             food.tick()
             reclass_clock = self.clocks[FOOD_RECLASSIFICATION_KEY]
             reclass_clock.tick()
-            self.food_tree.reclassify(food, food.shape)
+            if food.has_changed:
+                self.food_tree.reclassify(food, food.shape)
+                food.has_changed = False
             reclass_clock.tock()
         for creature in self.__queued_creatures:
             if creature.alive:
@@ -734,6 +736,8 @@ class Food(StageObject):
         self.__shape = shape
         self.__mass = mass
         self.graphic = FoodGraphic(self)
+        self.has_changed = True
+        self.time_until_growth = 0
 
     @property
     def mass(self):
@@ -744,8 +748,10 @@ class Food(StageObject):
     def mass(self, amount):
         """Sets the mass of this piece of Food."""
         if amount != self.__mass:
+            self.has_changed = True
             self.__mass = amount
             self.__shape.radius = math.sqrt(self.__mass / 2)
+            self.time_until_growth = FOOD_GROWTH_DELAY
             if self.__mass < 0.05:
                 self.kill()
             self.graphic.notify_listeners_of_change()
@@ -753,12 +759,6 @@ class Food(StageObject):
     @property
     def graphics(self):
         return [self.graphic]
-
-    # @environment.setter
-    # def environment(self, environment):
-    #     self.__environment = environment
-    #     if environment is not None and not environment.food_tree.contains(self, self.__shape):
-    #         environment.add_food(self)
 
     def kill(self):
         """Destroys this piece of Food, removing it from its Environment."""
@@ -772,7 +772,9 @@ class Food(StageObject):
 
     def tick(self):
         """This method should be called, each time a virtual time unit (tick) has passed."""
-        self.mass = min(MAX_FOOD_MASS, self.__mass + FOOD_GROWTH_RATE)
+        if self.time_until_growth == 0:
+            self.mass = min(MAX_FOOD_MASS, self.__mass + FOOD_GROWTH_RATE * FOOD_GROWTH_DELAY)
+        self.time_until_growth -=1
 
 
 class Creature(StageObject):

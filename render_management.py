@@ -1,6 +1,11 @@
 import threading
 import time
 import pygame
+import sys
+import cProfile
+
+
+g_physics = None
 
 
 class Manager:
@@ -17,6 +22,7 @@ class Manager:
         # self.pause_lock = threading.Lock()
         self._paused = False
         self.pyg_events = []
+        self._physics_counter = 0
 
     def start(self):
         self._running = True
@@ -25,10 +31,22 @@ class Manager:
         while self._running:
             for event in pygame.event.get():
                 self.pyg_events.append(event)
+        pygame.quit()
+        sys.exit()
+
+    @property
+    def physics(self):
+        return self._physics
+
+    @physics.setter
+    def physics(self, value):
+        self._physics = value
+        global g_physics
+        g_physics = value
+        self_physics_counter = 0
 
     def quit(self):
         self._running = False
-        pygame.quit()
 
     @property
     def pps(self):
@@ -65,7 +83,12 @@ class Manager:
             if time_to_next_physics_call < time_to_next_render_call:
                 self._last_physics_call = time.time()
                 if not self.paused and self._physics is not None:
-                    self._physics()
+                    if self._physics_counter % 100 == 99:
+                        cProfile.run('render_management.g_physics()')
+                    else:
+                        g_physics()
+                    # self._physics()
+                    self._physics_counter += 1
             else:
                 events = self.pyg_events
                 self.pyg_events = []

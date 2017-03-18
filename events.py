@@ -29,9 +29,10 @@ class EventManager:
         self.quit_listeners = []
         self.screen_clicked_listeners = []
         self.mouse_released_canvas = None
+        # pygame.event.set_allowed([pygame.QUIT, pygame.KEYDOWN, pygame.KEYUP, pygame.KEYRIGHT, pygame.KEYUP])
 
     def process_event(self, pyg_event):
-        if pyg_event.type == pygame.QUIT:  # If user clicked close
+        if pyg_event.type == pygame.QUIT or (pyg_event.type == pygame.KEYDOWN and pyg_event.key == pygame.K_ESCAPE):  # If user clicked close
             for listener in self.quit_listeners:
                 listener()
         else:

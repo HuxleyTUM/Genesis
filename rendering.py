@@ -9,10 +9,13 @@ import functools
 import events
 import colours
 import numbers
-
+import math
 
 render_lock = threading.Lock()
 graphics_counter = 0
+
+
+
 
 
 class Graphic:
@@ -50,6 +53,43 @@ class Graphic:
     @is_visible.setter
     def is_visible(self, value):
         raise Exception("Not implemented in "+str(type(self)))
+
+
+class LinesGraphic(Graphic):
+    def __init__(self, points):
+        super().__init__()
+        self.line_segments = []
+        for i in range(len(points)-1):
+            self.line_segments.append(shapes.LineSegment(points[i], points[i+1]))
+        self.__is_visible = True
+        self.bounding = get_bounding_rectangle(points)
+
+    @property
+    def bounding_box(self):
+        return self.bounding.to_bounding_box()
+
+    @property
+    def bounding_rectangle(self):
+        return self.bounding
+
+    def translate(self, delta):
+        for segment in self.line_segments:
+            segment.translate(delta)
+        self.bounding.translate(delta)
+
+    def scale(self, scalar):
+        for segment in self.line_segments:
+            start_point = segment.start_point
+            segment.start_point = (start_point[0] )
+        self.bounding.scale(scalar)
+
+    @property
+    def is_visible(self):
+        return self.__is_visible
+
+    @is_visible.setter
+    def is_visible(self, value):
+        self.__is_visible = value
 
 
 class TextGraphic(Graphic):
@@ -1008,7 +1048,10 @@ class Screen(Canvas):
         pygame.init()
         # self._monospaced_fonts = {}
         # self._arial_fonts = {}
+        flags = pygame.FULLSCREEN | pygame.DOUBLEBUF
         self.py_screen = pygame.display.set_mode(dimensions)
+        self.background = pygame.Surface(self.py_screen.get_size()).convert()
+        # self.py_screen.set_alpha(None)
         self.dimensions = dimensions
         # self._static_camera = RelativeCamera()
 
@@ -1023,7 +1066,7 @@ class Screen(Canvas):
         return shape
 
     def paint_text(self, label, bounding_rectangle, transform_shape=False):
-        self.py_screen.blit(label, (bounding_rectangle.left, bounding_rectangle.down))
+        self.background.blit(label, (bounding_rectangle.left, bounding_rectangle.down))
         return bounding_rectangle.to_bounding_box()
 
     def paint_shape(self, shape, colour, border_width, transform_shape=False):
@@ -1031,21 +1074,23 @@ class Screen(Canvas):
         max_border_width = max(min(bounding_box[2], bounding_box[3]) - 1, 0)
         border_width = min(border_width, max_border_width)
         if type(shape) is shapes.Circle:
-            pygame.draw.ellipse(self.py_screen, colour, bounding_box, border_width)
+            pygame.draw.ellipse(self.background, colour, bounding_box, border_width)
         elif type(shape) is shapes.Axis:
             axis = shape
             screen_pos_from = axis.center
             screen_pos_to = copy.copy(screen_pos_from)
             screen_pos_from[axis.dimension] = 0
             screen_pos_to[axis.dimension] = self.dimensions[axis.dimension]
-            pygame.draw.line(self.py_screen, colour, screen_pos_from, screen_pos_to, max(border_width, 1))
+            pygame.draw.line(self.background, colour, screen_pos_from, screen_pos_to, max(border_width, 1))
         elif type(shape) is shapes.LineSegment:
             line_segment = shape
-            pygame.draw.line(self.py_screen, colour, line_segment.start_point, line_segment.end_point)
+            pygame.draw.line(self.background, colour, line_segment.start_point, line_segment.end_point)
         elif type(shape) is shapes.Rectangle:
-            pygame.draw.rect(self.py_screen, colour, bounding_box, border_width)
+            pygame.draw.rect(self.background, colour, bounding_box, border_width)
         elif type(shape) is shapes.Polygon:
-            pygame.draw.polygon(self.py_screen, colour, shape.points, border_width)
+            pygame.draw.polygon(self.background, colour, shape.points, border_width)
+        elif type(shape) is shapes.PointLine:
+            pygame.draw.lines(self.background, colour, False, shape.points, border_width)
         else:
             raise "Unknown shape: " + str(type(shape))
         # pygame.draw.rect(self.py_screen, (255, 0, 0, 0), bounding_box, 1)
@@ -1218,9 +1263,9 @@ class PyGameRenderer(Renderer):
                 if drawn_bounding is not None:
                     if self.__visualise_boundings:
                         if graphic_info.changed_since_render:
-                            pygame.draw.rect(self.screen.py_screen, (255, 0, 0, 0), drawn_bounding, 1)
+                            pygame.draw.rect(self.screen.background, (255, 0, 0, 0), drawn_bounding, 1)
                         else:
-                            pygame.draw.rect(self.screen.py_screen, (255, 100, 100, 0), drawn_bounding, 1)
+                            pygame.draw.rect(self.screen.background, (255, 100, 100, 0), drawn_bounding, 1)
             if graphic_info.changed_since_render:
                 if not redrawing_whole_canvas:
                     if graphic_info.last_rect_rendered is not None:
@@ -1246,11 +1291,13 @@ class PyGameRenderer(Renderer):
         clock = self.thread_render_clock
         if clock is not None:
             clock.tick()
-        self.screen.py_screen.fill((0, 0, 0))
+        self.screen.background.fill((0, 0, 0))
         # self.boxes_to_update = None
         dirty_rectangles = frame.rects_to_update
         self.render_canvas(frame.canvas, dirty_rectangles)
+        self.screen.py_screen.blit(self.screen.background, (0, 0))
         pygame.display.update(dirty_rectangles)
+
         if clock is not None:
             clock.tock()
         render_lock.release()

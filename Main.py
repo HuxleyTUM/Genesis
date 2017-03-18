@@ -33,11 +33,11 @@ def create_number_listener(environment):
 
 
 def food_listener(environment):
-    if environment.tick_count % 50 == 0:
+    # if environment.tick_count % 50 == 0:
         # print("\n--- times ---")
-        for clock in environment.clocks.clocks:
-            # print(str(clock))
-            clock.reset()
+        # for clock in environment.clocks.clocks:
+        #     print(str(clock))
+        #     clock.reset()
         # print("\n")
     #     print("total time ticking: "+str(environment.clocks_ticking))
     #     print("time thinking: "+str(environment.clocks_thinking))
@@ -275,7 +275,7 @@ def create_environment(screen, environment_camera, environment_dimensions, creat
     active_environment = environment
     renderer.render_clock = environment.clocks[gen.RENDER_KEY]
     renderer.thread_render_clock = environment.clocks[gen.RENDER_THREAD_KEY]
-    manager._physics = environment.tick
+    manager.physics = environment.tick
 
 
 def start(environment_dimensions):

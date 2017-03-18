@@ -2,6 +2,19 @@ import math
 import numpy
 
 
+def get_bounding_rectangle(points):
+    min_x = math.inf
+    max_x = -math.inf
+    min_y = math.inf
+    max_y = -math.inf
+    for point in points:
+        min_x = min(point[0], min_x)
+        max_x = max(point[0], max_x)
+        min_y = min(point[1], min_y)
+        max_y = max(point[1], max_y)
+    return Rectangle(min_x, min_y, max_x-min_x, max_y-min_y)
+
+
 class Orientation:
     def __init__(self, direction, opposite=None):
         self.__direction = direction
@@ -297,6 +310,10 @@ class LineSegment(Shape):
     @property
     def start_point(self):
         return self.__start
+    
+    @start_point.setter
+    def start_point(self, start_point):
+        self.__start = start_point
 
     @property
     def start_point_x(self):
@@ -309,6 +326,10 @@ class LineSegment(Shape):
     @property
     def end_point(self):
         return self.__end
+    
+    @end_point.setter
+    def end_point(self, end_point):
+        self.__end = end_point
 
     @property
     def end_point_x(self):
@@ -591,47 +612,27 @@ class Rectangle(Shape):
         return self.bounding_boxes_collide(rectangle)
 
 
-class Polygon(Shape):
+class PointShape(Shape):
     def __init__(self, points):
         self.__points = points
-        self.__left_down = (0, 0)
-        self.__width = 0
-        self.__height = 0
-        self.__recalc_values()
-
-    def has_area(self):
-        return True
-
-    def __recalc_values(self):
-        min_x = math.inf
-        max_x = -math.inf
-        min_y = math.inf
-        max_y = -math.inf
-        for point in self.__points:
-            min_x = min(point[0], min_x)
-            max_x = max(point[0], max_x)
-            min_y = min(point[1], min_y)
-            max_y = max(point[1], max_y)
-        self.__width = max_x - min_x
-        self.__height = max_y - min_y
-        self.__left_down = (min_x, min_y)
+        self.__bounding = get_bounding_rectangle(points)
 
     @property
     def center_x(self):
-        return self.__left_down[0] + self.__width/2
+        return self.__bounding.center_x
 
     @center_x.setter
     def center_x(self, x):
-        dx = x - self.center_x
+        dx = x - self.__bounding.center_x
         self.translate((dx, 0))
 
     @property
     def center_y(self):
-        return self.__left_down[1] + self.__height/2
+        return self.__bounding.center_y
 
     @center_y.setter
     def center_y(self, y):
-        dy = y - self.center_y
+        dy = y - self.__bounding.center_y
         self.translate((0, dy))
 
     @property
@@ -646,52 +647,52 @@ class Polygon(Shape):
 
     @property
     def dimensions(self):
-        return self.__width, self.__height
+        return self.__bounding.dimensions
 
     @dimensions.setter
     def dimensions(self, dimensions):
-        scalar_x = dimensions[0] / self.__width
-        scalar_y = dimensions[1] / self.__height
+        scalar_x = dimensions[0] / self.__bounding.width
+        scalar_y = dimensions[1] / self.__bounding.height
         new_points = []
         for point in self.__points:
-            dx = point[0] - self.__left_down[0]
-            dy = point[1] - self.__left_down[1]
-            new_points.append((self.__left_down[0] + dx * scalar_x, self.__left_down[1] + dy * scalar_y))
+            dx = point[0] - self.__bounding.left
+            dy = point[1] - self.__bounding.down
+            new_points.append((self.__bounding.left + dx * scalar_x, self.__bounding.down + dy * scalar_y))
         self.__points = new_points
-        self.__width = dimensions[0]
-        self.__height = dimensions[1]
+        self.__bounding.width = dimensions[0]
+        self.__bounding.height = dimensions[1]
 
     @property
     def width(self):
-        return self.__width
+        return self.__bounding.width
 
     @width.setter
     def width(self, width):
-        self.dimensions = (width, self.__height)
+        self.dimensions = (width, self.__bounding.height)
 
     @property
     def height(self):
-        return self.__height
+        return self.__bounding.height
 
     @height.setter
     def height(self, height):
-        self.dimensions = (self.__width, height)
+        self.dimensions = (self.__bounding.width, height)
 
     @property
     def left(self):
-        return self.__left_down[0]
+        return self.__bounding.left
 
     @property
     def down(self):
-        return self.__left_down[1]
+        return self.__bounding.down
 
     @property
     def right(self):
-        return self.__left_down[0] + self.__width
+        return self.__bounding.right
 
     @property
     def up(self):
-        return self.__left_down[1] + self.__height
+        return self.__bounding.up
 
     @property
     def points(self):
@@ -701,11 +702,21 @@ class Polygon(Shape):
         new_points = []
         for point in self.__points:
             new_points.append((point[0] + delta[0], point[1] + delta[1]))
-        self.__left_down = (self.__left_down[0] + delta[0], self.__left_down[1] + delta[1])
+        self.__bounding.translate(delta)
         self.__points = new_points
 
     def scale(self, scalar):
         self.dimensions = (self.width * scalar[0], self.height * scalar[1])
+
+
+class Polygon(PointShape):
+    def has_area(self):
+        return True
+
+
+class PointLine(PointShape):
+    def has_area(self):
+        return False
 
 
 def flip_vector(vector):
