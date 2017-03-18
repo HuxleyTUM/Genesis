@@ -211,7 +211,23 @@ def get_graph_points(activation_function, input_range, scalar, offset, x_steps):
     points = []
     for x in np.arange(input_range[0], input_range[1], x_steps):
         points.append((x*scalar[0]+offset[0], activation_function(x)*scalar[1]+offset[1]))
-    return points
+    clean_points = []
+    last_added_point = None
+    for i in range(len(points)-1):
+        point = points[i]
+        if last_added_point is None:
+            clean_points.append(point)
+            last_added_point = point
+        else:
+            prev_slope = (last_added_point[1] - point[1]) / (last_added_point[0] - point[0])
+            next_slope = (point[1] - points[i+1][1]) / (point[0] - points[i+1][0])
+            slope_delta = prev_slope - next_slope
+            if prev_slope != -1:
+                if abs(slope_delta) > 0.1:
+                    clean_points.append(point)
+                    last_added_point = point
+    clean_points.append(points[-1])
+    return clean_points
 
 
 class BrainHighlight(OrganHighlight):
@@ -468,7 +484,7 @@ class Environment(rendering.SimpleCanvas):
             def click_listener(event):
                 found_creature = False
                 local_point = self.transform_point_from_screen(event.screen_mouse_position)
-                for creature in self.living_creatures:
+                for creature in reversed(self.living_creatures):
                     if creature.body.shape.point_lies_within(local_point):
                         creature_highlight.highlight(creature)
                         found_creature = True

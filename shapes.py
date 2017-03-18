@@ -614,7 +614,7 @@ class Rectangle(Shape):
 
 class PointShape(Shape):
     def __init__(self, points):
-        self.__points = points
+        self.__points = points[:]
         self.__bounding = get_bounding_rectangle(points)
 
     @property
@@ -637,7 +637,7 @@ class PointShape(Shape):
 
     @property
     def center(self):
-        return self.center_x, self.center_y
+        return self.__bounding.center
 
     @center.setter
     def center(self, pos):
@@ -659,8 +659,7 @@ class PointShape(Shape):
             dy = point[1] - self.__bounding.down
             new_points.append((self.__bounding.left + dx * scalar_x, self.__bounding.down + dy * scalar_y))
         self.__points = new_points
-        self.__bounding.width = dimensions[0]
-        self.__bounding.height = dimensions[1]
+        self.__bounding.dimensions = dimensions
 
     @property
     def width(self):

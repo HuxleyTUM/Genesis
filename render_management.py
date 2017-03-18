@@ -83,10 +83,10 @@ class Manager:
             if time_to_next_physics_call < time_to_next_render_call:
                 self._last_physics_call = time.time()
                 if not self.paused and self._physics is not None:
-                    if self._physics_counter % 100 == 99:
-                        cProfile.run('render_management.g_physics()')
-                    else:
-                        g_physics()
+                    # if self._physics_counter % 100 == 99:
+                    #     cProfile.run('render_management.g_physics()')
+                    # else:
+                    g_physics()
                     # self._physics()
                     self._physics_counter += 1
             else:
