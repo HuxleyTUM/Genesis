@@ -2,13 +2,7 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="a4b1317b-eaf8-44cf-9f02-7b583febf926" name="Default" comment="">
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Main.py" afterPath="$PROJECT_DIR$/Main.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/colours.py" afterPath="$PROJECT_DIR$/colours.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/events.py" afterPath="$PROJECT_DIR$/events.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/genesis.py" afterPath="$PROJECT_DIR$/genesis.py" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rendering.py" afterPath="$PROJECT_DIR$/rendering.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/shapes.py" afterPath="$PROJECT_DIR$/shapes.py" />
     </list>
     <ignored path="Genesis.iws" />
     <ignored path=".idea/workspace.xml" />
@@ -65,11 +59,11 @@
       <file leaf-file-name="rendering.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/rendering.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="149">
-              <caret line="368" column="38" selection-start-line="368" selection-start-column="38" selection-end-line="368" selection-end-column="38" />
+            <state relative-caret-position="297">
+              <caret line="569" column="68" selection-start-line="569" selection-start-column="68" selection-end-line="569" selection-end-column="68" />
               <folding>
                 <element signature="e#0#16#0" expanded="true" />
-                <marker date="1489997191554" expanded="true" signature="0:78" ph="import ..." />
+                <marker date="1489997672502" expanded="true" signature="0:78" ph="import ..." />
               </folding>
             </state>
           </provider>
@@ -110,8 +104,8 @@
       <file leaf-file-name="Main.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/Main.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-5600">
-              <caret line="21" column="19" selection-start-line="21" selection-start-column="19" selection-end-line="21" selection-end-column="19" />
+            <state relative-caret-position="259">
+              <caret line="209" column="23" selection-start-line="209" selection-start-column="23" selection-end-line="209" selection-end-column="23" />
               <folding>
                 <element signature="e#0#21#0" expanded="true" />
               </folding>
@@ -474,7 +468,7 @@
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/rendering.py</url>
-          <line>1531</line>
+          <line>1535</line>
           <option name="timeStamp" value="171" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
@@ -879,16 +873,6 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/Main.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-5600">
-          <caret line="21" column="19" selection-start-line="21" selection-start-column="19" selection-end-line="21" selection-end-column="19" />
-          <folding>
-            <element signature="e#0#21#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$USER_HOME$/AppData/Local/Programs/Python/Python35/Lib/site-packages/pygame/sysfont.py">
       <provider selected="true" editor-type-id="text-editor">
         <state relative-caret-position="161">
@@ -907,13 +891,23 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/Main.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="259">
+          <caret line="209" column="23" selection-start-line="209" selection-start-column="23" selection-end-line="209" selection-end-column="23" />
+          <folding>
+            <element signature="e#0#21#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/rendering.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="149">
-          <caret line="368" column="38" selection-start-line="368" selection-start-column="38" selection-end-line="368" selection-end-column="38" />
+        <state relative-caret-position="297">
+          <caret line="569" column="68" selection-start-line="569" selection-start-column="68" selection-end-line="569" selection-end-column="68" />
           <folding>
             <element signature="e#0#16#0" expanded="true" />
-            <marker date="1489997191554" expanded="true" signature="0:78" ph="import ..." />
+            <marker date="1489997672502" expanded="true" signature="0:78" ph="import ..." />
           </folding>
         </state>
       </provider>

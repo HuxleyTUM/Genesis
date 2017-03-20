@@ -567,7 +567,7 @@ class Container(Canvas):
 
     def add_and_center_canvas(self, canvas):
         self.add_canvas(canvas)
-        graphic_rectangle = canvas.local_bounding_rectangle
+        graphic_rectangle = canvas.transform_shape_to_parent(canvas.local_bounding_rectangle)
         old_center = self.local_bounding_rectangle.center
         graphic_center = graphic_rectangle.center
         canvas.translate((old_center[0] - graphic_center[0], old_center[1] - graphic_center[1]))
@@ -1229,7 +1229,11 @@ class ValueDisplay(Table):
 class ScrollingPane(SimpleContainer):
     def __init__(self, local_bounding_rectangle, scroll_vertically, scroll_horizontally, camera=RelativeCamera()):
         super().__init__(local_bounding_rectangle, camera)
-        self.pane = SimpleContainer(copy.copy(local_bounding_rectangle))
+        pane_area = copy.copy(local_bounding_rectangle)
+        pane_area.translate((3, 0))
+        pane_area.width -= 6
+        self.pane = SimpleContainer(pane_area)
+        self.pane.back_ground_colour = (123, 242, 94)
 
         self.add_canvas(self.pane)
         self.scroll_horizontally = scroll_horizontally
