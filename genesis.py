@@ -262,8 +262,8 @@ class BrainHighlight(OrganHighlight):
         self.neuron_graphics[neuron] = neuron_circle
         scaling = (self.neuron_radius / 2, -self.neuron_radius / 2)
         points = get_graph_points(neuron._activation_function, (-2, 2), scaling, (x, y), 0.2)
-        lines = shapes.PointLine(points)
-        self.organ_graphics.append(rendering.SimpleOutlineGraphic(lines, colours.WHITE))
+        synapse_lines = shapes.PointLine(points)
+        self.organ_graphics.append(rendering.SimpleOutlineGraphic(synapse_lines, colours.WHITE, possibly_obstructed=True))
 
     def visualize(self, brain):
         max_vertical = self.last_y

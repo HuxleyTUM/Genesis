@@ -9,7 +9,7 @@ import functools
 import events
 import colours
 import numbers
-import math
+import genesis
 
 render_lock = threading.Lock()
 
@@ -285,7 +285,7 @@ class Canvas:
         shape.dimensions = dimensions
         shape.translate((-shape.left, -shape.down))
         if type(shape) is shapes.Circle:
-            bounding_box = (0, 0, dimensions[0], dimensions[1])
+            bounding_box = (0, 0, int(round(dimensions[0])), int(round(dimensions[1])))
             max_border_width = max(min(bounding_box[2], bounding_box[3]) - 1, 0)
             border_width = min(border_width, max_border_width)
             dirty_rect = pygame.draw.ellipse(self.surface, colour, bounding_box, border_width)
@@ -482,14 +482,14 @@ class Container(Canvas):
         self.__surface = None
 
     def paint(self, screen_boxes_to_update, clipping_rectangle, outlines, global_bounding=None):
-        if global_bounding is None and (self.redraw_children or self.redraw_surface):
-            global_bounding = self.global_bounding_rectangle
-        self.reset_surface(global_bounding)
-        if self.redraw_children:
+        if self.is_visible and (self.redraw_children or self.redraw_surface or self.possibly_obstructed):
+            if global_bounding is None and (self.redraw_children or self.redraw_surface):
+                global_bounding = self.global_bounding_rectangle
+            self.reset_surface(global_bounding)
             for child in self.children:
                 child.paint(screen_boxes_to_update, global_bounding, outlines)
-        Canvas.paint(self, screen_boxes_to_update, clipping_rectangle, outlines, global_bounding)
-        self.__redraw_children = False
+            Canvas.paint(self, screen_boxes_to_update, clipping_rectangle, outlines, global_bounding)
+            self.__redraw_children = False
 
     @property
     def redraw_children(self):
@@ -923,7 +923,8 @@ class TextGraphic(AtomicGraphic):
             self.redraw_surface = True
 
     def paint(self, screen_boxes_to_update, clipping_rectangle, outlines, global_bounding=None):
-        Canvas.paint(self, screen_boxes_to_update, clipping_rectangle, outlines, global_bounding)
+        if self.is_visible:
+            Canvas.paint(self, screen_boxes_to_update, clipping_rectangle, outlines, global_bounding)
 
 
 class ShapedGraphic(AtomicGraphic):
@@ -1018,16 +1019,17 @@ class OutlineGraphic(ShapedGraphic):
         raise Exception("Not implemented in "+str(type(self)))
     
     def paint(self, screen_boxes_to_update, clipping_rectangle, outlines, global_bounding=None):
-        if global_bounding is None:
-            global_bounding = self.global_bounding_rectangle
-        self.reset_surface(global_bounding)
-        self.paint_shape(self.shape, self.border_colour, self.border_width, global_bounding.dimensions)
-        Canvas.paint(self, screen_boxes_to_update, clipping_rectangle, outlines, global_bounding)
+        if self.is_visible and (self.redraw_surface or self.possibly_obstructed):
+            if global_bounding is None:
+                global_bounding = self.global_bounding_rectangle
+            self.reset_surface(global_bounding)
+            self.paint_shape(self.shape, self.border_colour, self.border_width, global_bounding.dimensions)
+            Canvas.paint(self, screen_boxes_to_update, clipping_rectangle, outlines, global_bounding)
 
 
 class SimpleOutlineGraphic(OutlineGraphic):
     def __init__(self, shape, border_colour, border_width=1, is_visible=True, possibly_obstructed=False):
-        super().__init__()
+        super().__init__(possibly_obstructed=possibly_obstructed)
         self.__is_visible = is_visible
         self._border_width = border_width
         self._border_colour = border_colour
@@ -1100,7 +1102,7 @@ class MonoColouredGraphic(ShapedGraphic):
         raise Exception("Not implemented in "+str(type(self)))
     
     def paint(self, screen_boxes_to_update, clipping_rectangle, outlines, global_bounding=None):
-        if self.redraw_surface or self.possibly_obstructed:
+        if self.is_visible and (self.redraw_surface or self.possibly_obstructed):
             if global_bounding is None:
                 global_bounding = self.global_bounding_rectangle
             self.reset_surface(global_bounding)
