@@ -7,6 +7,7 @@ import rendering
 import events
 import functools
 import math
+import colours
 
 start_mass = 200
 mutation_model = gen.MutationModel(0.2, 0.3)
@@ -17,12 +18,12 @@ factor = 1.5
 width = 180 * factor
 height = 120 * factor
 
-init_food_count = int(30 * factor ** 2)
-max_food_count = int(80 * factor ** 2)
+init_food_count = 1#int(30 * factor ** 2)
+max_food_count = 1#int(80 * factor ** 2)
 init_food_mass = 5
 
-init_creature_count = 5
-min_creature_count = int(5 * factor ** 2)
+init_creature_count = 1#5
+min_creature_count = 1#int(5 * factor ** 2)
 
 active_environment = None
 
@@ -142,9 +143,9 @@ def create_play_button():
     button_area = shapes.Rectangle(0, 0, 30, 30)
     button_icon = shapes.Polygon([(6, 0), (-6, -10), (-6, 10)])
     # self.button_graphic_background = rendering.SimpleMonoColouredGraphic(button_rect_background, )
-    button_graphic_icon = rendering.SimpleMonoColouredGraphic(button_icon, (0, 255, 0, 0))
+    button_graphic_icon = rendering.SimpleMonoColouredGraphic(button_icon, colours.GREEN)
     button = rendering.Button(button_area)
-    button.register_and_center_graphic(button_graphic_icon)
+    button.add_and_center_canvas(button_graphic_icon)
     return button
 
 
@@ -154,8 +155,8 @@ def create_time_warp_button(increase):
     for dx in [-5, 5]:
         button_icon = shapes.Polygon([(3*c, 0), (-3*c, -10), (-3*c, 10)])
         # self.button_graphic_background = rendering.SimpleMonoColouredGraphic(button_rect_background, )
-        button_graphic = rendering.SimpleMonoColouredGraphic(button_icon, (0, 255, 0, 0))
-        button.register_and_center_graphic(button_graphic)
+        button_graphic = rendering.SimpleMonoColouredGraphic(button_icon, colours.GREEN)
+        button.add_and_center_canvas(button_graphic)
         button_graphic.translate((dx, 0))
     return button
 
@@ -165,8 +166,8 @@ def create_pause_button():
     button = rendering.Button(button_area)
     for x in (-4, 4):
         button_icon_left = shapes.Rectangle(0, 0, 6, 20)
-        button_graphic_icon = rendering.SimpleMonoColouredGraphic(button_icon_left, (100, 100, 100, 0))
-        button.register_and_center_graphic(button_graphic_icon)
+        button_graphic_icon = rendering.SimpleMonoColouredGraphic(button_icon_left, colours.grey(100))
+        button.add_and_center_canvas(button_graphic_icon)
         button_graphic_icon.translate((x, 0))
     return button
 
@@ -177,11 +178,11 @@ def create_visualise_bounding_button():
     icon_shapes = [shapes.Circle((8, 10), 7), shapes.LineSegment((5, 28), (28, 18))]
     for shape in icon_shapes:
         if shape.has_area():
-            shape_graphic = rendering.SimpleMonoColouredGraphic(shape, (0, 0, 255))
+            shape_graphic = rendering.SimpleMonoColouredGraphic(shape, colours.BLUE)
         else:
-            shape_graphic = rendering.SimpleOutlineGraphic(shape, (0, 0, 255))
-        button.register_graphic(shape_graphic)
-        button.register_graphic(rendering.SimpleOutlineGraphic(shape.to_bounding_rectangle(), (255, 0, 0)))
+            shape_graphic = rendering.SimpleOutlineGraphic(shape, colours.BLUE)
+        button.add_canvas(shape_graphic)
+        button.add_canvas(rendering.SimpleOutlineGraphic(shape.to_bounding_rectangle(), colours.RED))
 
     return button
 
@@ -203,13 +204,13 @@ def create_refresh_button():
     polygon_points = [(5, y), (0, y+5), (0, y-5)]
     arrow = shapes.Polygon(polygon_points)
     open_circle = shapes.Polygon(points)
-    shape_graphic = rendering.SimpleMonoColouredGraphic(open_circle, (0, 255, 0, 0))
-    arrow_graphic = rendering.SimpleMonoColouredGraphic(arrow, (0, 255, 0, 0))
+    shape_graphic = rendering.SimpleMonoColouredGraphic(open_circle, colours.GREEN)
+    arrow_graphic = rendering.SimpleMonoColouredGraphic(arrow, colours.GREEN)
     old_pos = (open_circle.left, open_circle.down)
-    button.register_and_center_graphic(shape_graphic)
+    button.add_and_center_canvas(shape_graphic)
     new_pos = (open_circle.left, open_circle.down)
     arrow.translate([x-y for x, y in zip(new_pos, old_pos)])
-    button.register_graphic(arrow_graphic)
+    button.add_canvas(arrow_graphic)
 
     return button
 
@@ -236,7 +237,7 @@ def create_task_bar(dimensions, render_manager, renderer, create_environment):
 
     visualise_bounding_button = create_visualise_bounding_button()
     task_bar.add_button(visualise_bounding_button)
-    visualise_bounding_button.action_listeners.append(renderer.visualise_boundings)
+    visualise_bounding_button.action_listeners.append(renderer.visualize_boundings)
 
     for forward in [True, False]:
         forward_button = create_time_warp_button(forward)
@@ -261,7 +262,7 @@ def create_environment(screen, environment_camera, environment_dimensions, creat
                        task_bar_height, renderer, manager):
     global active_environment
     if active_environment is not None:
-        screen.queue_canvas_for_removal(active_environment)
+        screen.remove_canvas(active_environment)
     environment = gen.Environment(environment_camera, environment_dimensions)
     environment.creature_highlight = creature_highlight
 
@@ -279,6 +280,7 @@ def create_environment(screen, environment_camera, environment_dimensions, creat
 
 
 def start(environment_dimensions):
+    print("environment dimensions: "+str(environment_dimensions))
     screen = rendering.Screen((1280, 700))
     side_bar_width = 400
     task_bar_height = 40

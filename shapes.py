@@ -137,6 +137,9 @@ class Shape:
         self.width = self.width * scalar[0]
         self.height = self.height * scalar[1]
 
+    # def scale_to(self, new_dimensions):
+    #     self.scale((new_dimensions[0] / self.width, new_dimensions[1] / self.height))
+
     def point_lies_within(self, point):
         raise Exception("Not implemented!")
 
@@ -250,7 +253,12 @@ class Circle(Shape):
 
     @property
     def dimensions(self):
-        return self.__radius, self.__radius
+        return self.__radius * 2, self.__radius * 2
+
+    @dimensions.setter
+    def dimensions(self, dimensions):
+        new_dim = (dimensions[0] + dimensions[1]) / 2
+        self.__radius = new_dim / 2
 
     @property
     def width(self):
@@ -610,6 +618,22 @@ class Rectangle(Shape):
 
     def collides_with_rectangle(self, rectangle):
         return self.bounding_boxes_collide(rectangle)
+
+    def clip_with_rectangle(self, clipping):
+        right = min(self.right, clipping.right)
+        up = min(self.up, clipping.up)
+        down = max(self.down, clipping.down)
+        left = max(self.left, clipping.left)
+        return Rectangle(left, down, right-left, up-down)
+
+    def clip_with_box(self, clipping):
+        left = max(self.left, clipping[0])
+        down = max(self.down, clipping[1])
+        width = min(self.right, clipping[2] + clipping[0]) - left
+        height = min(self.up, clipping[3] + clipping[1]) - down
+        if width < 0 or height < 0:
+            return None
+        return left, down, width, height
 
 
 class PointShape(Shape):

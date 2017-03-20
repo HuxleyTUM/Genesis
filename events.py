@@ -82,9 +82,9 @@ class EventManager:
     def find_canvases(self, screen_point, parent_canvas, canvases=None):
         if canvases is None:
             canvases = []
-        for canvas in reversed(parent_canvas.canvases):
-            global_canvas_area = canvas.global_canvas_area
-            if global_canvas_area.point_lies_within(screen_point):
+        for canvas in reversed(parent_canvas.children):
+            global_bounding_rectangle = canvas.global_bounding_rectangle
+            if global_bounding_rectangle.point_lies_within(screen_point):
                 self.find_canvases(screen_point, canvas, canvases)
         canvases.append(parent_canvas)
         return canvases

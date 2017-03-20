@@ -26,6 +26,10 @@ FOOD_GROWTH_DELAY = 10
 MAX_CREATURE_AGE = 250
 MAX_FOOD_MASS = 100
 
+FONT_TYPE = "arial"
+FONT_SIZE = 10
+HEADLINE_SIZE = 16
+
 
 def random_pos(width, height, borders=0):
     return [random_from_interval(borders, width-borders), random_from_interval(borders, height-borders)]
@@ -67,11 +71,11 @@ def get_dict_attr(obj, attr):
     raise AttributeError
 
 
-class OrganHighlight(rendering.SimpleCanvas):
-    def __init__(self, dimensions, header_text, organ_count, header_size=18, padding=6,
+class OrganHighlight(rendering.SimpleContainer):
+    def __init__(self, dimensions, header_text, organ_count, padding=6,
                  camera=rendering.RelativeCamera()):
         super().__init__(shapes.rect(dimensions), camera)
-        self.table = rendering.ValueDisplay(10, colours.rgb(255))
+        self.table = rendering.ValueDisplay(FONT_TYPE, FONT_SIZE, colours.WHITE)
         # self.table.add_row("tick cost", 0)
         self.header_text = header_text
         self.organ_graphics = []
@@ -80,42 +84,42 @@ class OrganHighlight(rendering.SimpleCanvas):
         self.last_y = padding
         if organ_count > 0:
             header_text += " "+str(organ_count)
-        self.header_label = rendering.TextGraphic(header_text, rendering.Fonts.arial_font(header_size))
+        self.header_label = rendering.TextGraphic(header_text, FONT_TYPE, HEADLINE_SIZE)
         self.header_label.position = (padding, self.last_y)
-        self.last_y += self.header_label.bounding_rectangle.height
+        self.last_y += self.header_label.local_bounding_rectangle.height
         self.line_graphic = None
         self.add_canvas(self.table, (padding, self.last_y+padding))
-        self.last_y += self.table.local_canvas_area.height + padding
+        self.last_y += self.table.local_bounding_rectangle.height + padding
 
     def _set_final_height(self, height):
         if self.line_graphic is not None:
-            self.un_register_graphic(self.line_graphic)
-        line_side_distance = self.local_canvas_area.width / 7
+            self.remove_canvas(self.line_graphic)
+        line_side_distance = self.local_bounding_rectangle.width / 7
         line_height = height + self.padding * 3
         line_start = (line_side_distance, line_height)
-        line_end = (self.local_canvas_area.width - line_side_distance, line_height)
+        line_end = (self.local_bounding_rectangle.width - line_side_distance, line_height)
         self.line_graphic = rendering.SimpleOutlineGraphic(shapes.LineSegment(line_start, line_end), (100, 100, 100, 0))
-        self.register_graphic(self.line_graphic)
+        self.add_canvas(self.line_graphic)
         final_height = line_height+self.padding*0.5
-        self.local_canvas_area.height = final_height
+        self.local_bounding_rectangle.height = final_height
 
     def highlight(self, organ):
         if organ is not None:
             if self.highlighted_organ is not None:
                 self.highlight(None)
-            self.register_graphic(self.header_label)
+            self.add_canvas(self.header_label)
             self.highlighted_organ = organ
             self.visualize(organ)
             max_y = 0
             for graphic in self.organ_graphics:
-                max_y = max(max_y, graphic.bounding_rectangle.down, graphic.bounding_rectangle.up)
-                self.register_graphic(graphic)
-            for canvas in self.canvases:
-                max_y = max(max_y, canvas.local_canvas_area.up+canvas.position_in_parent[1])
+                max_y = max(max_y, graphic.local_bounding_rectangle.down, graphic.local_bounding_rectangle.up)
+                self.add_canvas(graphic)
+            for canvas in self.children:
+                max_y = max(max_y, canvas.local_bounding_rectangle.up+canvas.position[1])
             self._set_final_height(max_y)
         else:
-            self.un_register_graphic(self.header_label)
-            self.un_register_graphics(self.organ_graphics)
+            self.remove_canvas(self.header_label)
+            self.remove_canvases(self.organ_graphics)
             self.organ_graphics = []
 
     def add_text(self, text, x_value=None, y_value=None):
@@ -124,11 +128,11 @@ class OrganHighlight(rendering.SimpleCanvas):
         update_last_y = y_value is None
         if update_last_y:
             y_value = self.last_y
-        label = rendering.TextGraphic(text, rendering.Fonts.arial_font(10))
+        label = rendering.TextGraphic(text, FONT_TYPE, FONT_SIZE)
         label.position = (x_value, y_value)
         self.organ_graphics.append(label)
         if update_last_y:
-            self.last_y += label.bounding_rectangle.height
+            self.last_y += label.local_bounding_rectangle.height
         return label
 
     def print_grid_text(self, grid_text):
@@ -144,7 +148,7 @@ class OrganHighlight(rendering.SimpleCanvas):
             for word in column:
                 text = self.add_text(str(word), last_column_max_x)
                 column_labels.append(text)
-                max_x = max(max_x, text.bounding_rectangle.right)
+                max_x = max(max_x, text.local_bounding_rectangle.right)
             last_column_max_x = max_x
         return grid
 
@@ -233,9 +237,9 @@ def get_graph_points(activation_function, input_range, scalar, offset, x_steps):
 class BrainHighlight(OrganHighlight):
     def __init__(self, dimensions, organ_count, camera=rendering.RelativeCamera()):
         super().__init__(dimensions, "Brain", organ_count, camera=camera)
-        self.live_button = rendering.TextButton("live view")
-        button_left = self.header_label.bounding_rectangle.right + self.padding
-        button_top = self.header_label.bounding_rectangle.down
+        self.live_button = rendering.TextButton("live view", FONT_TYPE, FONT_SIZE)
+        button_left = self.header_label.local_bounding_rectangle.right + self.padding
+        button_top = self.header_label.local_bounding_rectangle.down
         self.add_canvas(self.live_button, (button_left, button_top))
         def live_view_pressed(event): self.toggle_live_view()
         self.live_button.action_listeners.append(live_view_pressed)
@@ -253,7 +257,7 @@ class BrainHighlight(OrganHighlight):
 
     def __draw_neuron(self, neuron, x, y):
         circle = shapes.Circle((x, y), self.neuron_radius)
-        neuron_circle = rendering.SimpleMonoColouredGraphic(circle, (0, 0, 0, 0))
+        neuron_circle = rendering.SimpleMonoColouredGraphic(circle, colours.BLACK)
         self.organ_graphics.append(neuron_circle)
         self.neuron_graphics[neuron] = neuron_circle
         scaling = (self.neuron_radius / 2, -self.neuron_radius / 2)
@@ -273,7 +277,7 @@ class BrainHighlight(OrganHighlight):
             y = row_y_values[neuron_index]
             if neuron.label is not None:
                 text = self.add_text(neuron.label, y_value=y - self.text_offset)
-                self.neuron_label_width = max(self.neuron_label_width, text.bounding_rectangle.width)
+                self.neuron_label_width = max(self.neuron_label_width, text.local_bounding_rectangle.width)
         right_most_neuron_x = 0
         for layer, layer_index in zip(brain.layers, range(len(brain.layers))):
             x = self.padding + self.neuron_label_width + self.border + layer_index * self.column_width + self.neuron_radius
@@ -290,8 +294,7 @@ class BrainHighlight(OrganHighlight):
             if neuron.label is not None:
                 y = row_y_values[neuron_index]
                 text = self.add_text(neuron.label, x_value=right_label_x, y_value=y-self.text_offset)
-                self.neuron_label_width = max(self.neuron_label_width, text.bounding_rectangle.width)
-                # label = rendering.TextGraphic(neuron.label, rendering.Fonts.arial_font(10), (right_label_x, y))
+                self.neuron_label_width = max(self.neuron_label_width, text.local_bounding_rectangle.width)
                 # self.organ_graphics.append(label)
         for layer, layer_index in zip(brain.layers, range(len(brain.layers))):
             if layer_index + 1 < len(brain.layers):
@@ -303,7 +306,7 @@ class BrainHighlight(OrganHighlight):
                         if neuron.has_weight(next_neuron):
                             next_neuron_shape = self.neuron_graphics[next_neuron].shape
                             synapse_shape = shapes.LineSegment(neuron_shape.center, next_neuron_shape.center)
-                            synapse_graphic = rendering.SimpleOutlineGraphic(synapse_shape, colours.BLACK)
+                            synapse_graphic = rendering.SimpleOutlineGraphic(synapse_shape, colours.WHITE)
                             self.organ_graphics.insert(0, synapse_graphic)
                             self.synapse_graphics[neuron][next_neuron] = synapse_graphic
 
@@ -348,13 +351,13 @@ class BrainHighlight(OrganHighlight):
         self.redraw(neuron_colour, synapse_colour)
 
     def draw_static_view(self):
-        neuron_colour = lambda n: colours.rgb(50) if n.is_bias else colours.rgb(150)
+        neuron_colour = lambda n: colours.grey(50) if n.is_bias else colours.grey(150)
         synapse_colour = lambda n1, n2: colours.visualise_magnitude(n1.get_weight(n2) * 0.5)
         self.redraw(neuron_colour, synapse_colour)
 
 
 class CreatureHighlight(rendering.ScrollingPane):
-    def __init__(self, dimensions, camera=rendering.RelativeCamera(), padding=5, header_size=18):
+    def __init__(self, dimensions, camera=rendering.RelativeCamera(), padding=5):
         super().__init__(shapes.rect(dimensions), True, False, camera)
         self.border_width = 3
         self.border_colour = colours.WHITE
@@ -363,16 +366,17 @@ class CreatureHighlight(rendering.ScrollingPane):
         self.organ_highlights = []
         self.padding = padding
         self.last_y = self.padding
-        self.header_label = rendering.TextGraphic("Creature", rendering.Fonts.arial_font(header_size))
-        self.pane.register_graphic(self.header_label)
+        self.header_label = rendering.TextGraphic("Creature", FONT_TYPE, HEADLINE_SIZE)
+        self.pane.add_canvas(self.header_label)
         self.header_label.position = (padding, self.last_y)
-        self.last_y += self.header_label.bounding_rectangle.height
+        self.last_y += self.header_label.local_bounding_rectangle.height
         self.initial_y = self.last_y
         self.table = None
 
     def highlight(self, creature):
         if self.highlighted_creature is not creature:
             if creature is not None:
+                print("clicked creature!")
                 self.last_y = self.initial_y
 
                 organ_type_counter = {}
@@ -384,16 +388,16 @@ class CreatureHighlight(rendering.ScrollingPane):
                     organ_type_counter[type(organ)] += 1
                 if self.highlighted_creature is not None:
                     self.highlight(None)
-                self.table = rendering.ValueDisplay(10, colours.WHITE)
+                self.table = rendering.ValueDisplay(FONT_TYPE, FONT_SIZE, colours.WHITE)
                 self.organ_highlights.append(self.table)
                 self.table.add_row(("generation", creature.generation))
                 self.table.add_row(("is alive", lambda: "yes" if creature.alive else "no"))
                 self.table.add_row(("age", lambda: creature.age))
                 self.pane.add_canvas(self.table, (self.padding, self.last_y + self.padding))
-                self.last_y += self.table.local_canvas_area.height + self.padding
+                self.last_y += self.table.local_bounding_rectangle.height + self.padding
                 creature.highlight()
                 self.highlighted_creature = creature
-                dimensions = self.local_canvas_area.dimensions
+                dimensions = self.local_bounding_rectangle.dimensions
                 for organ in creature.organs:
                     if organ_type_counter[type(organ)] > 1:
                         index = organ_type_index[type(organ)]
@@ -415,34 +419,34 @@ class CreatureHighlight(rendering.ScrollingPane):
                     else:
                         continue
 
-                    self.pane.add_canvas(highlight, (0, self.last_y))
+                    self.pane.add_canvas(highlight, (3, self.last_y))
                     highlight.highlight(organ)
                     highlight.table.add_row(("tick cost", organ.tick_cost))
                     self.organ_highlights.append(highlight)
-                    self.last_y += highlight.local_canvas_area.height
+                    self.last_y += highlight.local_bounding_rectangle.height
                 if creature.environment is not None:
                     creature.environment.tick_listeners.append(self.refresh_values)
-                self.pane.local_canvas_area.height = self.last_y
+                self.pane.local_bounding_rectangle.height = self.last_y
             else:
                 if self.highlighted_creature is not None:
                     if self.highlighted_creature.environment is not None:
                         self.highlighted_creature.environment.tick_listeners.remove(self.refresh_values)
                     self.highlighted_creature.un_highlight()
                     self.highlighted_creature = None
-                    # self.pane.queue_canvas_for_removal(self.table)
-                    for canvas in self.pane.canvases[:]:
-                        self.pane.queue_canvas_for_removal(canvas)
+                    # self.pane.remove_canvas(self.table)
+                    for canvas in self.pane.children[:]:
+                        self.pane.remove_canvas(canvas)
                     self.table = None
 
     def refresh_values(self):
         if self.table is not None:
             self.table.refresh_values()
-            for highlight in self.pane.canvases:
+            for highlight in self.pane.children:
                 if isinstance(highlight, OrganHighlight):
                     highlight.refresh_values()
 
 
-class Environment(rendering.SimpleCanvas):
+class Environment(rendering.SimpleContainer):
     """This class represents the environment in which Creatures live. Not only does it manage the creatures living in
     it but also the Food which is meant to be consumed by the Creatures. The environment has no real sense of time. It
     has to be controlled from the outside via its Environment.tick() method. Whenever this method is called, the world
@@ -455,9 +459,12 @@ class Environment(rendering.SimpleCanvas):
     Creatures in the world can not decide for themselves how they can move around. They need to make call the method
     move_creature(creature, distance_to_travel)."""
     def __init__(self, camera, local_dimensions=(1000, 1000)):
-        super().__init__(shapes.rect(local_dimensions), camera, back_ground_colour=(0, 0, 0, 0))
+        super().__init__(shapes.rect(local_dimensions), camera, back_ground_colour=colours.BLACK)
         # self.__canvas = None
         # self.__canvas_dimensions = local_dimensions
+        self.foobar_shape = shapes.Circle((local_dimensions[0] - 10, 30), 30)
+        self.foobar = rendering.SimpleMonoColouredGraphic(self.foobar_shape, colours.RED)
+        self.add_canvas(self.foobar)
         self.__tick_count = 0
         self.__stage_objects = []
         # self.__creatures = []
@@ -493,19 +500,6 @@ class Environment(rendering.SimpleCanvas):
                     creature_highlight.highlight(None)
             self.mouse_pressed_event_listeners.append(click_listener)
 
-    # @property
-    # def canvas(self):
-    #     return self.__canvas
-    #
-    # @canvas.setter
-    # def canvas(self, canvas):
-    #     if canvas is not None:
-    #         canvas.register_graphics(self.graphics)
-    #     elif self.__canvas is not None:
-    #         self.__canvas.un_register_graphics(self.graphics)
-    #     self.__canvas = canvas
-
-
     @property
     def graphics(self):
         graphics = []
@@ -529,10 +523,6 @@ class Environment(rendering.SimpleCanvas):
         return self.__tick_count
 
     @property
-    def creatures(self):
-        return self.__creatures
-
-    @property
     def living_creatures(self):
         return self.__living_creatures
 
@@ -546,11 +536,11 @@ class Environment(rendering.SimpleCanvas):
 
     @property
     def width(self):
-        return self.local_canvas_area.width
+        return self.local_bounding_rectangle.width
 
     @property
     def height(self):
-        return self.local_canvas_area.height
+        return self.local_bounding_rectangle.height
 
     @property
     def queued_creatures(self):
@@ -572,22 +562,25 @@ class Environment(rendering.SimpleCanvas):
     def __add_stage_object(self, stage_object):
         self.stage_objects.append(stage_object)
         stage_object.environment = self
-        self.register_graphics(stage_object.graphics)
+        for graphic in stage_object.graphics:
+            shape = graphic.shape
+            pos = (shape.left, shape.down)
+            self.add_canvas(graphic, pos)
 
     def __remove_stage_object(self, stage_object):
         if stage_object.environment is not None:
             stage_object.environment = None
         self.__stage_objects.remove(stage_object)
-        self.un_register_graphics(stage_object.graphics)
+        self.remove_canvases(stage_object.graphics)
 
     def tick(self):
         """As an Environment has no real sense of time, this method must be called periodically from the outside."""
-        # if self.__tick_count % 50 == 0:
-        #     print("environment objects..")
-        #     print("\t"+str(len(self.living_creatures)))
-        #     print("\t"+str(len(self.stage_objects)))
-        #     print("\t"+str(len(self.tick_listeners)))
-        #     print("\t"+str(len(self.__queued_creatures)))
+        if self.foobar.parent_canvas is not None:
+            if not self.local_bounding_rectangle.point_lies_within(self.foobar_shape.center):
+                self.remove_canvas(self.foobar)
+            else:
+                self.foobar_shape.translate((0.5, 0))
+                self.foobar.redraw_surface = True
         tick_clock = self.clocks[TICK_KEY]
         tick_clock.tick()
         for food in self.food_tree.elements:
@@ -663,7 +656,6 @@ class Environment(rendering.SimpleCanvas):
                     break
         colliding_clock.tock()
         return food_found
-        # self._food.difference_update(food_eaten)  # = [filter(lambda f: f not in food_eaten, self._food)]
 
     def sum_mass(self, food_pellets):
         summed = 0
@@ -673,7 +665,7 @@ class Environment(rendering.SimpleCanvas):
 
     def create_food(self, x, y, mass):
         """Creates Food of circular shape at the specified destination with the given mass."""
-        self.add_food(Food(mass, shapes.Circle((x, y), 0)))
+        self.add_food(Food(mass, x, y))
 
     def add_food(self, food):
         """Add the specified Food to the Environment for further consumption by Creatures populating it."""
@@ -713,17 +705,17 @@ class StageObject:
                             "Environment.tick().")
         # if environment is not None:
         #     if environment.canvas is not None:
-        #         environment.canvas.register_graphics(self.graphics)
+        #         environment.canvas.add_canvases(self.graphics)
         # elif self.__environment is not None:
         #     if self.__environment.canvas is not None:
-        #         self.__environment.canvas.un_register_graphics(self.graphics)
+        #         self.__environment.canvas.remove_canvases(self.graphics)
         self.__environment = environment
 
 
 class FoodGraphic(rendering.MonoColouredGraphic):
-    def __init__(self, food, is_visible=True):
-        super().__init__()
-        self.__is_visible = is_visible
+    def __init__(self, food):
+        super().__init__(possibly_obstructed=True)
+        self.__is_visible = True
         self.food = food
 
     @property
@@ -732,7 +724,7 @@ class FoodGraphic(rendering.MonoColouredGraphic):
 
     @property
     def fill_colour(self):
-        return 0, 255, 0, 0
+        return colours.GREEN
 
     @property
     def is_visible(self):
@@ -742,18 +734,19 @@ class FoodGraphic(rendering.MonoColouredGraphic):
     def is_visible(self, is_visible):
         if is_visible is not self.__is_visible:
             self.__is_visible = is_visible
-            self.notify_listeners_of_change()
+            self.redraw_surface = True
 
 
 class Food(StageObject):
     """This class represents a piece of Food. It can be placed in the Environment and consumed by Creatures."""
-    def __init__(self, mass, shape):
+    def __init__(self, mass, x, y):
         super().__init__()
-        self.__shape = shape
-        self.__mass = mass
+        self.__shape = shapes.Circle((x, y), 0)
+        self.__mass = None
         self.graphic = FoodGraphic(self)
         self.has_changed = True
         self.time_until_growth = 0
+        self.mass = mass
 
     @property
     def mass(self):
@@ -770,7 +763,7 @@ class Food(StageObject):
             self.time_until_growth = FOOD_GROWTH_DELAY
             if self.__mass < 0.05:
                 self.kill()
-            self.graphic.notify_listeners_of_change()
+            self.graphic.redraw_surface = True
 
     @property
     def graphics(self):
@@ -1002,9 +995,9 @@ class Creature(StageObject):
 
 
 class MonoColouredOrganGraphic(rendering.MonoColouredGraphic):
-    def __init__(self, shape_retriever, colour, is_visible=True):
-        super().__init__()
-        self.__is_visible = is_visible
+    def __init__(self, shape_retriever, colour):
+        super().__init__(possibly_obstructed=True)
+        self.__is_visible = True
         self.colour = colour
         self.shape_retriever = shape_retriever
 
@@ -1024,12 +1017,12 @@ class MonoColouredOrganGraphic(rendering.MonoColouredGraphic):
     def is_visible(self, is_visible):
         if is_visible is not self.__is_visible:
             self.__is_visible = is_visible
-            self.notify_listeners_of_change()
+            self.redraw_surface = True
 
 
 class OutlinedOrganGraphic(rendering.OutlineGraphic):
     def __init__(self, shape_retriever, colour, border_width=1, is_visible=True):
-        super().__init__()
+        super().__init__(possibly_obstructed=True)
         self.__is_visible = is_visible
         self.__border_width = border_width
         self.colour = colour
@@ -1055,7 +1048,7 @@ class OutlinedOrganGraphic(rendering.OutlineGraphic):
     def is_visible(self, is_visible):
         if is_visible is not self.__is_visible:
             self.__is_visible = is_visible
-            self.notify_listeners_of_change()
+            self.redraw_surface = True
 
 
 class Organ:
@@ -1087,9 +1080,9 @@ class Organ:
     def __repr__(self):
         return self.__str__()
 
-    def notify_graphic_listeners_of_change(self, *args):
-        for graphic in self.graphics:
-            graphic.notify_listeners_of_change()
+    # def notify_graphic_listeners_of_change(self, *args):
+    #     for graphic in self.graphics:
+    #         graphic.redraw_surface = True
 
     def __add_position_listeners_to_creature(self, old_creature, new_creature):
         if new_creature is not None:
@@ -1122,11 +1115,11 @@ class Organ:
                 if self not in creature.organs:
                     creature.add_organ(self)
                 if creature.environment and creature.environment.renderer is not None:
-                    creature.environment.renderer.register_graphics(self.graphics)
+                    creature.environment.renderer.add_canvases(self.graphics)
             else:
                 if self.__creature is not None and self.__creature.environment is not None and \
                                 self.__creature.environment.renderer is not None:
-                    self.__creature.environment.renderer.un_register_graphics(self.graphics)
+                    self.__creature.environment.renderer.remove_canvases(self.graphics)
             old_creature = self.__creature
             self.__creature = creature
             for creature_listener in self.creature_listeners:
@@ -1434,11 +1427,11 @@ class Brain(Organ):
 
 class EuclideanEye(Organ):
     def __init__(self, body_distance, rotation, radius):
-        self.__field_of_view_graphic = OutlinedOrganGraphic(self.get_field_of_view_shape, (150, 150, 255, 0))
-        self.__eye_graphic = MonoColouredOrganGraphic(self.get_eye_shape, (255, 0, 0, 0))
-        self.__graphics_listener = self.notify_graphic_listeners_of_change
-        # self.graphics_listener = self.__graphic.notify_listeners_of_change
-        super().__init__("eye", self.__graphics_listener, self.__graphics_listener)
+        self.__field_of_view_graphic = OutlinedOrganGraphic(self.get_field_of_view_shape, (150, 150, 255, 255))
+        self.__eye_graphic = MonoColouredOrganGraphic(self.get_eye_shape, colours.RED)
+        # self.__graphics_listener = self.notify_graphic_listeners_of_change
+        def repaint(x, y): self.__eye_graphic.redraw_surface = self.__field_of_view_graphic.redraw_surface = True
+        super().__init__("eye", repaint, repaint)
         self.body_distance = body_distance
         self.rotation = rotation
         self.radius = radius
@@ -1483,8 +1476,10 @@ class EuclideanEye(Organ):
 
 class Mouth(Organ):
     def __init__(self, body_distance, rotation, capacity=10., mouth_radius=2):
-        self.__graphic = MonoColouredOrganGraphic(self.get_mouth_shape, (0, 255, 255, 0))
-        self.__graphics_listener = self.__graphic.notify_listeners_of_change
+        self.__graphic = MonoColouredOrganGraphic(self.get_mouth_shape, colours.TEAL)
+
+        def repaint(*args): self.__graphic.redraw_surface = True
+        self.__graphics_listener = repaint
         super().__init__("mouth", self.__graphics_listener, self.__graphics_listener)
         self.__body_distance = body_distance
         self.__rotation = rotation
@@ -1661,15 +1656,7 @@ class Mouth(Organ):
             else:
                 eaten += food.mass
                 food.mass = 0
-        # self._food.difference_update(food_eaten)  # = [filter(lambda f: f not in food_eaten, self._food)]
         return eaten
-
-    # def find_colliding_food_for_thread(self):
-    #     self.__colliding_food_lock_0.acquire()
-    #     while True:
-    #         self.__colliding_food = self.find_colliding_food()
-    #         self.__colliding_food_lock_1.release()
-    #         self.__colliding_food_lock_0.acquire()
 
     def find_colliding_food(self):
         """Tries to consume Food which intersects with shape up the given maximum mass max_mass. The consumed mass
@@ -1684,7 +1671,7 @@ class Mouth(Organ):
 
 class BodyGraphic(rendering.MonoColouredGraphic):
     def __init__(self, body, is_visible=True):
-        super().__init__()
+        super().__init__(possibly_obstructed=True)
         self.__is_visible = is_visible
         self.body = body
 
@@ -1694,7 +1681,7 @@ class BodyGraphic(rendering.MonoColouredGraphic):
             age = self.body.creature.age
         else:
             age = MAX_CREATURE_AGE
-        return 0, 0, 255 - 200 * (age / MAX_CREATURE_AGE), 0
+        return colours.b(255 - 200 * (age / MAX_CREATURE_AGE))
 
     @property
     def shape(self):
@@ -1708,7 +1695,7 @@ class BodyGraphic(rendering.MonoColouredGraphic):
     def is_visible(self, is_visible):
         if is_visible is not self.__is_visible:
             self.__is_visible = is_visible
-            self.notify_listeners_of_change()
+            self.redraw_surface = True
 
 
 class Body(Organ):
@@ -1732,16 +1719,23 @@ class Body(Organ):
         self.__mass = mass
         self.__graphic = BodyGraphic(self)
         self.__highlight_graphic = None
-        self.mass_listeners.append(self.__graphic.notify_listeners_of_change)
+
+        def repaint(*args):
+            self.__graphic.redraw_surface = True
+            if self.__highlight_graphic is not None:
+                self.__highlight_graphic.redraw_surface = True
+        self.mass_listeners.append(repaint)
+        self.position_listeners.append(repaint)
+        self.rotation_listeners.append(repaint)
 
     def highlight(self):
         if self.__highlight_graphic is None:
-            self.__highlight_graphic = rendering.SimpleOutlineGraphic(self.shape, (255, 0, 0, 0))
-            self.creature.environment.register_graphic(self.__highlight_graphic)
+            self.__highlight_graphic = rendering.SimpleOutlineGraphic(self.shape, colours.RED)
+            self.creature.environment.add_canvas(self.__highlight_graphic, self.__highlight_graphic.position)
 
     def un_highlight(self):
         if self.__highlight_graphic is not None:
-            self.creature.environment.un_register_graphic(self.__highlight_graphic)
+            self.creature.environment.remove_canvas(self.__highlight_graphic)
             self.__highlight_graphic = None
 
     def __notify_position_listeners(self, old_position, new_position):
