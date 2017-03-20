@@ -18,12 +18,12 @@ factor = 1.5
 width = 180 * factor
 height = 120 * factor
 
-init_food_count = 1#int(30 * factor ** 2)
-max_food_count = 1#int(80 * factor ** 2)
+init_food_count = int(30 * factor ** 2)
+max_food_count = int(80 * factor ** 2)
 init_food_mass = 5
 
-init_creature_count = 1#5
-min_creature_count = 1#int(5 * factor ** 2)
+init_creature_count = 5
+min_creature_count = int(5 * factor ** 2)
 
 active_environment = None
 

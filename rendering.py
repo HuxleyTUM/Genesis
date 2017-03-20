@@ -1233,7 +1233,6 @@ class ScrollingPane(SimpleContainer):
         pane_area.translate((3, 0))
         pane_area.width -= 6
         self.pane = SimpleContainer(pane_area)
-        self.pane.back_ground_colour = (123, 242, 94)
 
         self.add_canvas(self.pane)
         self.scroll_horizontally = scroll_horizontally

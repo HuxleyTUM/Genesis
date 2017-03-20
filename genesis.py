@@ -460,18 +460,10 @@ class Environment(rendering.SimpleContainer):
     move_creature(creature, distance_to_travel)."""
     def __init__(self, camera, local_dimensions=(1000, 1000)):
         super().__init__(shapes.rect(local_dimensions), camera, back_ground_colour=colours.BLACK)
-        # self.__canvas = None
-        # self.__canvas_dimensions = local_dimensions
-        self.foobar_shape = shapes.Circle((local_dimensions[0] - 10, 30), 30)
-        self.foobar = rendering.SimpleMonoColouredGraphic(self.foobar_shape, colours.RED)
-        self.add_canvas(self.foobar)
         self.__tick_count = 0
         self.__stage_objects = []
-        # self.__creatures = []
         self.__living_creatures = []
-        # self.__food_pellets = set()
         self.__food_tree = binary_tree.BinaryTree(local_dimensions, 6)
-        # self.__dimensions = local_dimensions
         self.__queued_creatures = []
         self.tick_listeners = []
         self.__last_tick_time = -1
@@ -575,12 +567,6 @@ class Environment(rendering.SimpleContainer):
 
     def tick(self):
         """As an Environment has no real sense of time, this method must be called periodically from the outside."""
-        if self.foobar.parent_canvas is not None:
-            if not self.local_bounding_rectangle.point_lies_within(self.foobar_shape.center):
-                self.remove_canvas(self.foobar)
-            else:
-                self.foobar_shape.translate((0.5, 0))
-                self.foobar.redraw_surface = True
         tick_clock = self.clocks[TICK_KEY]
         tick_clock.tick()
         for food in self.food_tree.elements:
@@ -594,10 +580,7 @@ class Environment(rendering.SimpleContainer):
         for creature in self.__queued_creatures:
             if creature.alive:
                 self.__living_creatures.append(creature)
-                # self.__creatures.append(creature)
                 self.__add_stage_object(creature)
-                # self.__stage_objects.append(creature)
-                # creature.environment = self
         self.__queued_creatures.clear()
         for creature in self.__living_creatures[:]:
             creature.sense()
@@ -648,7 +631,6 @@ class Environment(rendering.SimpleContainer):
         colliding_clock = self.clocks[FOOD_COLLISION_KEY]
         colliding_clock.tick()
         food_found = []
-        # remaining_capacity = max_mass
         for food in self.food_tree.get_collision_candidates(shape):
             if shape.collides(food.shape):
                 food_found.append(food)
@@ -669,7 +651,6 @@ class Environment(rendering.SimpleContainer):
 
     def add_food(self, food):
         """Add the specified Food to the Environment for further consumption by Creatures populating it."""
-        # self.__food_pellets.add(food)
         self.food_tree.classify(food, food.shape)
         self.__add_stage_object(food)
 
@@ -703,12 +684,6 @@ class StageObject:
             raise Exception("Can't set environment in StageObject as long as it doesn't exist in that environment."
                             "Please call Environment.add_stage_object(stage_object) and wait for the following"
                             "Environment.tick().")
-        # if environment is not None:
-        #     if environment.canvas is not None:
-        #         environment.canvas.add_canvases(self.graphics)
-        # elif self.__environment is not None:
-        #     if self.__environment.canvas is not None:
-        #         self.__environment.canvas.remove_canvases(self.graphics)
         self.__environment = environment
 
 

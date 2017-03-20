@@ -2,6 +2,8 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="a4b1317b-eaf8-44cf-9f02-7b583febf926" name="Default" comment="">
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Main.py" afterPath="$PROJECT_DIR$/Main.py" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/genesis.py" afterPath="$PROJECT_DIR$/genesis.py" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rendering.py" afterPath="$PROJECT_DIR$/rendering.py" />
     </list>
     <ignored path="Genesis.iws" />
@@ -22,11 +24,11 @@
   </component>
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="375">
-      <file leaf-file-name="genesis.py" pinned="false" current-in-tab="false">
+      <file leaf-file-name="genesis.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/genesis.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="193">
-              <caret line="420" column="0" selection-start-line="420" selection-start-column="0" selection-end-line="420" selection-end-column="0" />
+            <state relative-caret-position="149">
+              <caret line="462" column="0" selection-start-line="462" selection-start-column="0" selection-end-line="462" selection-end-column="0" />
               <folding>
                 <element signature="e#0#11#0" expanded="true" />
               </folding>
@@ -56,14 +58,14 @@
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="rendering.py" pinned="false" current-in-tab="true">
+      <file leaf-file-name="rendering.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/rendering.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="297">
-              <caret line="569" column="68" selection-start-line="569" selection-start-column="68" selection-end-line="569" selection-end-column="68" />
+            <state relative-caret-position="315">
+              <caret line="1235" column="0" selection-start-line="1235" selection-start-column="0" selection-end-line="1235" selection-end-column="0" />
               <folding>
                 <element signature="e#0#16#0" expanded="true" />
-                <marker date="1489997672502" expanded="true" signature="0:78" ph="import ..." />
+                <marker date="1489997707551" expanded="true" signature="0:78" ph="import ..." />
               </folding>
             </state>
           </provider>
@@ -104,8 +106,8 @@
       <file leaf-file-name="Main.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/Main.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="259">
-              <caret line="209" column="23" selection-start-line="209" selection-start-column="23" selection-end-line="209" selection-end-column="23" />
+            <state relative-caret-position="286">
+              <caret line="25" column="21" selection-start-line="25" selection-start-column="21" selection-end-line="25" selection-end-column="21" />
               <folding>
                 <element signature="e#0#21#0" expanded="true" />
               </folding>
@@ -161,9 +163,9 @@
         <option value="$PROJECT_DIR$/events.py" />
         <option value="$PROJECT_DIR$/colours.py" />
         <option value="$PROJECT_DIR$/shapes.py" />
+        <option value="$PROJECT_DIR$/rendering.py" />
         <option value="$PROJECT_DIR$/Main.py" />
         <option value="$PROJECT_DIR$/genesis.py" />
-        <option value="$PROJECT_DIR$/rendering.py" />
       </list>
     </option>
   </component>
@@ -468,7 +470,7 @@
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/rendering.py</url>
-          <line>1535</line>
+          <line>1534</line>
           <option name="timeStamp" value="171" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
@@ -881,33 +883,33 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/genesis.py">
+    <entry file="file://$PROJECT_DIR$/rendering.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="193">
-          <caret line="420" column="0" selection-start-line="420" selection-start-column="0" selection-end-line="420" selection-end-column="0" />
+        <state relative-caret-position="315">
+          <caret line="1235" column="0" selection-start-line="1235" selection-start-column="0" selection-end-line="1235" selection-end-column="0" />
           <folding>
-            <element signature="e#0#11#0" expanded="true" />
+            <element signature="e#0#16#0" expanded="true" />
+            <marker date="1489997707551" expanded="true" signature="0:78" ph="import ..." />
           </folding>
         </state>
       </provider>
     </entry>
     <entry file="file://$PROJECT_DIR$/Main.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="259">
-          <caret line="209" column="23" selection-start-line="209" selection-start-column="23" selection-end-line="209" selection-end-column="23" />
+        <state relative-caret-position="286">
+          <caret line="25" column="21" selection-start-line="25" selection-start-column="21" selection-end-line="25" selection-end-column="21" />
           <folding>
             <element signature="e#0#21#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/rendering.py">
+    <entry file="file://$PROJECT_DIR$/genesis.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="297">
-          <caret line="569" column="68" selection-start-line="569" selection-start-column="68" selection-end-line="569" selection-end-column="68" />
+        <state relative-caret-position="149">
+          <caret line="462" column="0" selection-start-line="462" selection-start-column="0" selection-end-line="462" selection-end-column="0" />
           <folding>
-            <element signature="e#0#16#0" expanded="true" />
-            <marker date="1489997672502" expanded="true" signature="0:78" ph="import ..." />
+            <element signature="e#0#11#0" expanded="true" />
           </folding>
         </state>
       </provider>
