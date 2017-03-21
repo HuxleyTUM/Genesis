@@ -31,12 +31,13 @@ class EventManager:
         self.mouse_released_canvas = None
         # pygame.event.set_allowed([pygame.QUIT, pygame.KEYDOWN, pygame.KEYUP, pygame.KEYRIGHT, pygame.KEYUP])
 
-    def process_event(self, pyg_event):
+    def process_event(self, pyg_event_tuple):
+        pyg_event = pyg_event_tuple[0]
         if pyg_event.type == pygame.QUIT or (pyg_event.type == pygame.KEYDOWN and pyg_event.key == pygame.K_ESCAPE):  # If user clicked close
             for listener in self.quit_listeners:
                 listener()
         else:
-            screen_pos = pygame.mouse.get_pos()
+            screen_pos = pyg_event_tuple[1]
             event = Event()
             event.screen_mouse_position = screen_pos
             canvas_point_list = self.find_canvases(screen_pos, self.screen)

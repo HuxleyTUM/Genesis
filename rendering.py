@@ -244,8 +244,6 @@ class Canvas:
         blit = self.reblit or draw and self.is_visible
         update_old = self.reblit and update_any
         update_new = (self.redraw_surface or self.reblit) and update_any
-        # if type(self) is TextGraphic and type(self.parent_canvas) is ValueDisplay:
-        #     print((self.text, self.redraw_surface, self.reblit, update_any))
         global_bounding = None
         if draw or blit or update_new or len(self.screen_boxes_to_update) > 0:
             global_bounding = self.global_bounding_rectangle
@@ -517,11 +515,7 @@ class Container(Canvas):
 
     def paint_to_surface(self, screen_boxes_to_update, outlines, global_bounding, parent_bounding, update_children=True):
         self.reset_surface(global_bounding)
-        # if type(self) is Screen:
-        #     print((self.reblit, self.redraw_surface, self.__children_overlap))
         for child in self.children:
-            # if type(self) is Screen:
-            #     print("\t"+str((child.reblit, child.redraw_surface, child.__children_overlap)))
             if self.__children_overlap:
                 child.reblit = True
             child.paint_to_parent(screen_boxes_to_update, outlines, global_bounding, update_children)
@@ -778,11 +772,7 @@ class AtomicGraphic(Canvas):
     def redraw_surface(self, redraw_surface):
         self.__redraw_surface = redraw_surface
         if redraw_surface and self.parent_canvas is not None:
-            # pass
             self.parent_canvas.redraw_children = True
-            # if type(self) is TextGraphic:
-            #     # text = self.text
-            #     print("blaa")
 
     @property
     def surface(self):
@@ -1404,7 +1394,6 @@ class Screen(Container):
             for outline in outlines:
                 pygame.draw.rect(self.surface, colours.RED, outline, 1)
         self.py_screen.blit(self.surface, (0, 0))
-        # print(screen_boxes_to_update)
         return screen_boxes_to_update
 
     @property

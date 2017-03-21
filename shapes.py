@@ -2,6 +2,14 @@ import math
 import numpy
 
 
+def get_generous_bounding_rectangle(points):
+    rect = get_bounding_rectangle(points)
+    rect.translate((-1, -1))
+    rect.width += 2
+    rect.height += 2
+    return rect
+
+
 def get_bounding_rectangle(points):
     min_x = math.inf
     max_x = -math.inf
@@ -13,6 +21,16 @@ def get_bounding_rectangle(points):
         min_y = min(point[1], min_y)
         max_y = max(point[1], max_y)
     return Rectangle(min_x, min_y, max_x-min_x, max_y-min_y)
+
+
+def scale_points(points, target_rectangle):
+    old_bounding = get_bounding_rectangle(points)
+    new_points = []
+    scalar = numpy.divide(target_rectangle.dimensions, old_bounding.dimensions)
+    for point in points:
+        new_points.append(((point[0] - old_bounding.left) * scalar[0] + target_rectangle.left,
+                           (point[1] - old_bounding.down) * scalar[1] + target_rectangle.down))
+    return new_points
 
 
 class Orientation:
@@ -282,7 +300,6 @@ class Circle(Shape):
             self.__radius *= scalar[0]
             self.translate((self.__radius, self.__radius))
         else:
-            print(scalar)
             raise Exception("Not implemented!")
 
     def point_lies_within(self, point):
@@ -651,7 +668,7 @@ class Rectangle(Shape):
 class PointShape(Shape):
     def __init__(self, points):
         self.__points = points[:]
-        self.__bounding = get_bounding_rectangle(points)
+        self.__bounding = get_generous_bounding_rectangle(points)
 
     @property
     def center_x(self):

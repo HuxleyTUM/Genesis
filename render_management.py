@@ -29,7 +29,7 @@ class Manager:
         event_manager.quit_listeners.append(self.quit)
         # self.pause_lock = threading.Lock()
         self._paused = False
-        self.pyg_events = []
+        self.pyg_events_tuples = []
         self.profile_physics_calls = False
         self.profile_render_calls = False
         self.physics_stats = None
@@ -40,8 +40,9 @@ class Manager:
         t = threading.Thread(target=self.run)
         t.start()
         while self._running:
+            mouse_pos = pygame.mouse.get_pos()
             for event in pygame.event.get():
-                self.pyg_events.append(event)
+                self.pyg_events_tuples.append((event, mouse_pos))
         pygame.quit()
         sys.exit()
 
@@ -112,10 +113,10 @@ class Manager:
                         self._physics()
                     self._physics_counter += 1
             else:
-                events = self.pyg_events
-                self.pyg_events = []
-                for pyg_event in events:  # User did something
-                    self.event_manager.process_event(pyg_event)
+                events = self.pyg_events_tuples
+                self.pyg_events_tuples = []
+                for pyg_event_tuple in events:  # User did something
+                    self.event_manager.process_event(pyg_event_tuple)
                 self._last_render_call = time.time()
                 if self._render is not None:
                     if self.profile_render_calls:

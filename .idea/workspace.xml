@@ -2,9 +2,8 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="a4b1317b-eaf8-44cf-9f02-7b583febf926" name="Default" comment="">
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/dictionaries/Neuron.xml" afterPath="$PROJECT_DIR$/.idea/dictionaries/Neuron.xml" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/Main.py" afterPath="$PROJECT_DIR$/Main.py" />
+      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/events.py" afterPath="$PROJECT_DIR$/events.py" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/genesis.py" afterPath="$PROJECT_DIR$/genesis.py" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/render_management.py" afterPath="$PROJECT_DIR$/render_management.py" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/rendering.py" afterPath="$PROJECT_DIR$/rendering.py" />
@@ -31,8 +30,8 @@
       <file leaf-file-name="genesis.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/genesis.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="200">
-              <caret line="238" column="95" selection-start-line="238" selection-start-column="95" selection-end-line="238" selection-end-column="95" />
+            <state relative-caret-position="163">
+              <caret line="144" column="13" selection-start-line="144" selection-start-column="8" selection-end-line="144" selection-end-column="13" />
               <folding>
                 <element signature="e#0#11#0" expanded="true" />
               </folding>
@@ -50,11 +49,11 @@
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="render_management.py" pinned="false" current-in-tab="true">
+      <file leaf-file-name="render_management.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/render_management.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="80">
-              <caret line="32" column="42" selection-start-line="32" selection-start-column="37" selection-end-line="32" selection-end-column="42" />
+            <state relative-caret-position="217">
+              <caret line="118" column="48" selection-start-line="118" selection-start-column="48" selection-end-line="118" selection-end-column="48" />
               <folding>
                 <element signature="e#0#16#0" expanded="true" />
               </folding>
@@ -75,11 +74,11 @@
       <file leaf-file-name="rendering.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/rendering.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="89">
-              <caret line="493" column="8" selection-start-line="493" selection-start-column="8" selection-end-line="493" selection-end-column="8" />
+            <state relative-caret-position="163">
+              <caret line="32" column="13" selection-start-line="32" selection-start-column="8" selection-end-line="32" selection-end-column="13" />
               <folding>
                 <element signature="e#0#16#0" expanded="true" />
-                <marker date="1490098303831" expanded="true" signature="0:78" ph="import ..." />
+                <marker date="1490105705198" expanded="true" signature="0:78" ph="import ..." />
               </folding>
             </state>
           </provider>
@@ -105,11 +104,11 @@
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="shapes.py" pinned="false" current-in-tab="false">
+      <file leaf-file-name="shapes.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/shapes.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="22">
-              <caret line="466" column="6" selection-start-line="466" selection-start-column="6" selection-end-line="466" selection-end-column="6" />
+            <state relative-caret-position="185">
+              <caret line="671" column="0" selection-start-line="671" selection-start-column="0" selection-end-line="671" selection-end-column="0" />
               <folding>
                 <element signature="e#0#11#0" expanded="true" />
               </folding>
@@ -132,8 +131,8 @@
       <file leaf-file-name="events.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/events.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="1562">
-              <caret line="86" column="0" selection-start-line="86" selection-start-column="0" selection-end-line="86" selection-end-column="0" />
+            <state relative-caret-position="921">
+              <caret line="79" column="35" selection-start-line="42" selection-start-column="16" selection-end-line="80" selection-end-column="53" />
               <folding>
                 <element signature="e#0#13#0" expanded="true" />
               </folding>
@@ -163,13 +162,13 @@
         <option value="$PROJECT_DIR$/colors.py" />
         <option value="$PROJECT_DIR$/binary_tree.py" />
         <option value="$PROJECT_DIR$/graphics.py" />
-        <option value="$PROJECT_DIR$/events.py" />
         <option value="$PROJECT_DIR$/colours.py" />
         <option value="$PROJECT_DIR$/Main.py" />
-        <option value="$PROJECT_DIR$/shapes.py" />
+        <option value="$PROJECT_DIR$/render_management.py" />
+        <option value="$PROJECT_DIR$/events.py" />
         <option value="$PROJECT_DIR$/genesis.py" />
         <option value="$PROJECT_DIR$/rendering.py" />
-        <option value="$PROJECT_DIR$/render_management.py" />
+        <option value="$PROJECT_DIR$/shapes.py" />
       </list>
     </option>
   </component>
@@ -445,7 +444,7 @@
       <window_info id="Find" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.32771084" sideWeight="0.48281333" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Python Console" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
-      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.5927711" sideWeight="0.43997884" order="2" side_tool="false" content_ui="tabs" />
+      <window_info id="Run" active="true" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.32289156" sideWeight="0.43997884" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Structure" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Favorites" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25383395" sideWeight="0.51452285" order="2" side_tool="true" content_ui="tabs" />
@@ -474,26 +473,21 @@
       <breakpoints>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/rendering.py</url>
-          <line>1567</line>
+          <line>1556</line>
           <option name="timeStamp" value="171" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/rendering.py</url>
-          <line>784</line>
-          <option name="timeStamp" value="185" />
+          <url>file://$PROJECT_DIR$/genesis.py</url>
+          <line>221</line>
+          <option name="timeStamp" value="194" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/rendering.py</url>
-          <line>1398</line>
-          <option name="timeStamp" value="191" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/rendering.py</url>
-          <line>242</line>
-          <option name="timeStamp" value="192" />
+          <url>file://$PROJECT_DIR$/genesis.py</url>
+          <line>225</line>
+          <option name="timeStamp" value="195" />
         </line-breakpoint>
       </breakpoints>
-      <option name="time" value="193" />
+      <option name="time" value="196" />
     </breakpoint-manager>
     <watches-manager />
   </component>
@@ -873,53 +867,53 @@
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/shapes.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="22">
-          <caret line="466" column="6" selection-start-line="466" selection-start-column="6" selection-end-line="466" selection-end-column="6" />
-          <folding>
-            <element signature="e#0#11#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/genesis.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="200">
-          <caret line="238" column="95" selection-start-line="238" selection-start-column="95" selection-end-line="238" selection-end-column="95" />
-          <folding>
-            <element signature="e#0#11#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/events.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="1562">
-          <caret line="86" column="0" selection-start-line="86" selection-start-column="0" selection-end-line="86" selection-end-column="0" />
+        <state relative-caret-position="921">
+          <caret line="79" column="35" selection-start-line="42" selection-start-column="16" selection-end-line="80" selection-end-column="53" />
           <folding>
             <element signature="e#0#13#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/rendering.py">
+    <entry file="file://$PROJECT_DIR$/render_management.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="89">
-          <caret line="493" column="8" selection-start-line="493" selection-start-column="8" selection-end-line="493" selection-end-column="8" />
+        <state relative-caret-position="217">
+          <caret line="118" column="48" selection-start-line="118" selection-start-column="48" selection-end-line="118" selection-end-column="48" />
           <folding>
             <element signature="e#0#16#0" expanded="true" />
-            <marker date="1490098303831" expanded="true" signature="0:78" ph="import ..." />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/render_management.py">
+    <entry file="file://$PROJECT_DIR$/rendering.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="80">
-          <caret line="32" column="42" selection-start-line="32" selection-start-column="37" selection-end-line="32" selection-end-column="42" />
+        <state relative-caret-position="163">
+          <caret line="32" column="13" selection-start-line="32" selection-start-column="8" selection-end-line="32" selection-end-column="13" />
           <folding>
             <element signature="e#0#16#0" expanded="true" />
+            <marker date="1490105705198" expanded="true" signature="0:78" ph="import ..." />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/genesis.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="163">
+          <caret line="144" column="13" selection-start-line="144" selection-start-column="8" selection-end-line="144" selection-end-column="13" />
+          <folding>
+            <element signature="e#0#11#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/shapes.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="185">
+          <caret line="671" column="0" selection-start-line="671" selection-start-column="0" selection-end-line="671" selection-end-column="0" />
+          <folding>
+            <element signature="e#0#11#0" expanded="true" />
           </folding>
         </state>
       </provider>

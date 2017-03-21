@@ -52,6 +52,13 @@ def sigmoid_activation(input_value):
     return math.tanh(input_value)
 
 
+def gaussian(mu, sig):
+    return lambda x: math.exp(-(x - mu) ** 2.) / (2 * sig ** 2.)
+
+
+gaussian_activation = gaussian(0, 1)
+
+
 def convert_to_delta_distance(distance, angle):
     """Takes a distance and a direction and computes the resulting 2D vector."""
     rad = math.radians(angle)
@@ -211,10 +218,11 @@ class EyeHighlight(OrganHighlight):
     #     self.table.set(1, 3,  str(self.highlighted_organ.food_pellets_spotted_count))
 
 
-def get_graph_points(activation_function, input_range, scalar, offset, x_steps):
+def get_graph_points(activation_function, input_range, x_steps, target_rectangle):
     points = []
     for x in np.arange(input_range[0], input_range[1], x_steps):
-        points.append((x*scalar[0]+offset[0], activation_function(x)*scalar[1]+offset[1]))
+        points.append((x, -activation_function(x)))
+    points = shapes.scale_points(points, target_rectangle)
     clean_points = []
     last_added_point = None
     for i in range(len(points)-1):
@@ -260,10 +268,10 @@ class BrainHighlight(OrganHighlight):
         neuron_circle = rendering.SimpleMonoColouredGraphic(circle, colours.BLACK)
         self.organ_graphics.append(neuron_circle)
         self.neuron_graphics[neuron] = neuron_circle
-        scaling = (self.neuron_radius / 2, -self.neuron_radius / 2)
-        points = get_graph_points(neuron._activation_function, (-2, 2), scaling, (x, y), 0.2)
+        function_bounding = circle.to_bounding_rectangle()
+        points = get_graph_points(neuron._activation_function, (-2, 2), 0.2, function_bounding)
         synapse_lines = shapes.PointLine(points)
-        self.organ_graphics.append(rendering.SimpleOutlineGraphic(synapse_lines, colours.WHITE))
+        self.organ_graphics.append(rendering.SimpleOutlineGraphic(synapse_lines, colours.WHITE, 1))
 
     def visualize(self, brain):
         max_vertical = self.last_y
@@ -1296,7 +1304,14 @@ class Brain(Organ):
 
     def add_hidden_neuron(self, neuron=None):
         if neuron is None:
-            neuron = Neuron(sigmoid_activation, "hidden " + str(len(self.__hidden_layer)))
+            random_value = random.random()
+            if random_value < 0.7:
+                activation = sigmoid_activation
+            elif random_value < 0.9:
+                activation = gaussian_activation
+            else:
+                activation = binary_activation
+            neuron = Neuron(activation, "hidden " + str(len(self.__hidden_layer)))
         self.__hidden_layer.append(neuron)
         if not neuron.is_bias:
             Brain._connect_layer_to_neuron(self.__input_layer, neuron)
