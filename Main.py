@@ -52,13 +52,13 @@ def food_listener(environment):
     #     print("times: "+str(environment.clockss))
     #     print("organ times: "+str(environment.organ_times))
     #     print("organ clone times: "+str(environment.organ_clone_time))
-    for i in range(environment.food_tree.size, max_food_count):
+    if environment.food_tree.size < max_food_count:
         place_random_food(environment)
 
 
 def place_random_food(environment):
     r_pos = gen.random_pos(width, height)
-    environment.create_food(r_pos[0], r_pos[1], init_food_mass)
+    environment.add_food(gen.Food(init_food_mass, r_pos[0], r_pos[1]))
 
 
 def place_random_creature(environment):

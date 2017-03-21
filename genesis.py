@@ -55,7 +55,7 @@ def sigmoid_activation(input_value):
 def convert_to_delta_distance(distance, angle):
     """Takes a distance and a direction and computes the resulting 2D vector."""
     rad = math.radians(angle)
-    return [math.sin(rad)*distance, math.cos(rad)*distance]
+    return math.sin(rad) * distance, math.cos(rad) * distance
 
 
 def clip(number, min_value, max_value):
@@ -73,8 +73,8 @@ def get_dict_attr(obj, attr):
 
 class OrganHighlight(rendering.SimpleContainer):
     def __init__(self, dimensions, header_text, organ_count, padding=6,
-                 camera=rendering.RelativeCamera()):
-        super().__init__(shapes.rect(dimensions), camera)
+                 camera=rendering.RelativeCamera(), children_overlap=False):
+        super().__init__(shapes.rect(dimensions), camera, children_overlap=children_overlap)
         self.table = rendering.ValueDisplay(FONT_TYPE, FONT_SIZE, colours.WHITE)
         # self.table.add_row("tick cost", 0)
         self.header_text = header_text
@@ -236,7 +236,7 @@ def get_graph_points(activation_function, input_range, scalar, offset, x_steps):
 
 class BrainHighlight(OrganHighlight):
     def __init__(self, dimensions, organ_count, camera=rendering.RelativeCamera()):
-        super().__init__(dimensions, "Brain", organ_count, camera=camera)
+        super().__init__(dimensions, "Brain", organ_count, camera=camera, children_overlap=True)
         self.live_button = rendering.TextButton("live view", FONT_TYPE, FONT_SIZE)
         button_left = self.header_label.local_bounding_rectangle.right + self.padding
         button_top = self.header_label.local_bounding_rectangle.down
@@ -263,7 +263,7 @@ class BrainHighlight(OrganHighlight):
         scaling = (self.neuron_radius / 2, -self.neuron_radius / 2)
         points = get_graph_points(neuron._activation_function, (-2, 2), scaling, (x, y), 0.2)
         synapse_lines = shapes.PointLine(points)
-        self.organ_graphics.append(rendering.SimpleOutlineGraphic(synapse_lines, colours.WHITE, possibly_obstructed=True))
+        self.organ_graphics.append(rendering.SimpleOutlineGraphic(synapse_lines, colours.WHITE))
 
     def visualize(self, brain):
         max_vertical = self.last_y
@@ -459,7 +459,7 @@ class Environment(rendering.SimpleContainer):
     Creatures in the world can not decide for themselves how they can move around. They need to make call the method
     move_creature(creature, distance_to_travel)."""
     def __init__(self, camera, local_dimensions=(1000, 1000)):
-        super().__init__(shapes.rect(local_dimensions), camera, back_ground_colour=colours.BLACK)
+        super().__init__(shapes.rect(local_dimensions), camera, back_ground_colour=colours.BLACK, children_overlap=True)
         self.__tick_count = 0
         self.__stage_objects = []
         self.__living_creatures = []
@@ -471,6 +471,7 @@ class Environment(rendering.SimpleContainer):
         self.__creature_highlight = None
         self.clocks = ClockTower([Clock(FOOD_COLLISION_KEY), Clock(TICK_KEY), Clock(THINKING_KEY), Clock(RENDER_KEY),
                                  Clock(FOOD_RECLASSIFICATION_KEY), Clock(RENDER_THREAD_KEY)])
+        self.reclass_clock = self.clocks[FOOD_RECLASSIFICATION_KEY]
 
     @property
     def creature_highlight(self):
@@ -567,16 +568,15 @@ class Environment(rendering.SimpleContainer):
 
     def tick(self):
         """As an Environment has no real sense of time, this method must be called periodically from the outside."""
-        tick_clock = self.clocks[TICK_KEY]
-        tick_clock.tick()
+        # tick_clock = self.clocks[TICK_KEY]
+        # tick_clock.tick()
         for food in self.food_tree.elements:
             food.tick()
-            reclass_clock = self.clocks[FOOD_RECLASSIFICATION_KEY]
-            reclass_clock.tick()
+            # self.reclass_clock.tick()
             if food.has_changed:
                 self.food_tree.reclassify(food, food.shape)
                 food.has_changed = False
-            reclass_clock.tock()
+            # self.reclass_clock.tock()
         for creature in self.__queued_creatures:
             if creature.alive:
                 self.__living_creatures.append(creature)
@@ -594,27 +594,29 @@ class Environment(rendering.SimpleContainer):
         current_time = time.time()
         self.__last_tick_delta = current_time - self.__last_tick_time
         self.__last_tick_time = current_time
-        tick_clock.tock()
+        # tick_clock.tock()
 
     def move_creature(self, creature, distance_to_travel):
         """Creatures can not move freely in the Environment as they please. To move a Creature, one must call this
         method and after the Environment has done the necessary collision detection it decides on how far the creature
         actually moved. This distance is then returned."""
-        [x, y] = [creature.center_x, creature.center_y]
+        x = creature.center_x
+        y = creature.center_y
         rotation = creature.body.rotation
-        [delta_x, delta_y] = convert_to_delta_distance(distance_to_travel, rotation)
+        (delta_x, delta_y) = convert_to_delta_distance(distance_to_travel, rotation)
         # G todo: calculate new position using x, y, distance_to_travel & rotation
-        [new_x, new_y] = [x + delta_x, y + delta_y]
-        translated_shape = copy.deepcopy(creature.body.shape)
-        translated_shape.center = [new_x, new_y]
+        new_x = x + delta_x
+        new_y = y + delta_y
+        # translated_shape = copy.deepcopy(creature.body.shape)
+        # translated_shape.center = (new_x, new_y)
         # G todo: the following only computes if the the new position is valid.
         # G todo- it doesn't calculate how far the object should actually move instead!
         is_valid = True
-        [width, height] = creature.body.shape.dimensions
+        (width, height) = creature.body.shape.dimensions
         if new_x+width/2 > self.width or new_x-width/2 < 0 or new_y+height/2 > self.height or new_y-height/2 < 0:
             is_valid = False
         if is_valid:
-            creature.body.center = [new_x, new_y]
+            creature.body.center = (new_x, new_y)
         return distance_to_travel if is_valid else 0
 
     def turn_creature(self, creature, angle_to_turn):
@@ -628,15 +630,15 @@ class Environment(rendering.SimpleContainer):
             raise Exception("Turning creatures is not implemented for shape " + str(type(creature.body.shape)))
 
     def find_colliding_food(self, shape, break_if=lambda x: False):
-        colliding_clock = self.clocks[FOOD_COLLISION_KEY]
-        colliding_clock.tick()
+        # colliding_clock = self.clocks[FOOD_COLLISION_KEY]
+        # colliding_clock.tick()
         food_found = []
         for food in self.food_tree.get_collision_candidates(shape):
             if shape.collides(food.shape):
                 food_found.append(food)
                 if break_if(food_found):
                     break
-        colliding_clock.tock()
+        # colliding_clock.tock()
         return food_found
 
     def sum_mass(self, food_pellets):
@@ -689,7 +691,7 @@ class StageObject:
 
 class FoodGraphic(rendering.MonoColouredGraphic):
     def __init__(self, food):
-        super().__init__(possibly_obstructed=True)
+        super().__init__()
         self.__is_visible = True
         self.food = food
 
@@ -707,9 +709,8 @@ class FoodGraphic(rendering.MonoColouredGraphic):
 
     @is_visible.setter
     def is_visible(self, is_visible):
-        if is_visible is not self.__is_visible:
+        if is_visible != self.__is_visible:
             self.__is_visible = is_visible
-            self.redraw_surface = True
 
 
 class Food(StageObject):
@@ -731,6 +732,8 @@ class Food(StageObject):
     @mass.setter
     def mass(self, amount):
         """Sets the mass of this piece of Food."""
+        if amount > MAX_FOOD_MASS:
+            amount = MAX_FOOD_MASS
         if amount != self.__mass:
             self.has_changed = True
             self.__mass = amount
@@ -757,8 +760,8 @@ class Food(StageObject):
     def tick(self):
         """This method should be called, each time a virtual time unit (tick) has passed."""
         if self.time_until_growth == 0:
-            self.mass = min(MAX_FOOD_MASS, self.__mass + FOOD_GROWTH_RATE * FOOD_GROWTH_DELAY)
-        self.time_until_growth -=1
+            self.mass += FOOD_GROWTH_RATE * FOOD_GROWTH_DELAY
+        self.time_until_growth -= 1
 
 
 class Creature(StageObject):
@@ -971,7 +974,7 @@ class Creature(StageObject):
 
 class MonoColouredOrganGraphic(rendering.MonoColouredGraphic):
     def __init__(self, shape_retriever, colour):
-        super().__init__(possibly_obstructed=True)
+        super().__init__()
         self.__is_visible = True
         self.colour = colour
         self.shape_retriever = shape_retriever
@@ -990,9 +993,8 @@ class MonoColouredOrganGraphic(rendering.MonoColouredGraphic):
 
     @is_visible.setter
     def is_visible(self, is_visible):
-        if is_visible is not self.__is_visible:
+        if is_visible != self.__is_visible:
             self.__is_visible = is_visible
-            self.redraw_surface = True
 
 
 class OutlinedOrganGraphic(rendering.OutlineGraphic):
@@ -1021,9 +1023,8 @@ class OutlinedOrganGraphic(rendering.OutlineGraphic):
 
     @is_visible.setter
     def is_visible(self, is_visible):
-        if is_visible is not self.__is_visible:
+        if is_visible != self.__is_visible:
             self.__is_visible = is_visible
-            self.redraw_surface = True
 
 
 class Organ:
@@ -1054,10 +1055,6 @@ class Organ:
 
     def __repr__(self):
         return self.__str__()
-
-    # def notify_graphic_listeners_of_change(self, *args):
-    #     for graphic in self.graphics:
-    #         graphic.redraw_surface = True
 
     def __add_position_listeners_to_creature(self, old_creature, new_creature):
         if new_creature is not None:
@@ -1155,7 +1152,6 @@ class Neuron:
         self.is_bias = is_bias
         self._label = label
         self._connections = {}
-        self._fire_listeners = []
         self._activation_function = activation_function
         self._summed_input = 0
         self._last_amount = 0
@@ -1192,8 +1188,6 @@ class Neuron:
 
     def fire(self):
         amount = self.consume()
-        for fire_listener in self._fire_listeners:
-            fire_listener.fired(amount)
         for target, weight in self._connections.items():
             target.receive_fire(weight * amount)
 
@@ -1405,8 +1399,8 @@ class EuclideanEye(Organ):
         self.__field_of_view_graphic = OutlinedOrganGraphic(self.get_field_of_view_shape, (150, 150, 255, 255))
         self.__eye_graphic = MonoColouredOrganGraphic(self.get_eye_shape, colours.RED)
         # self.__graphics_listener = self.notify_graphic_listeners_of_change
-        def repaint(x, y): self.__eye_graphic.redraw_surface = self.__field_of_view_graphic.redraw_surface = True
-        super().__init__("eye", repaint, repaint)
+        def reblit(x, y): self.__eye_graphic.reblit = self.__field_of_view_graphic.reblit = True
+        super().__init__("eye", reblit, reblit)
         self.body_distance = body_distance
         self.rotation = rotation
         self.radius = radius
@@ -1453,7 +1447,7 @@ class Mouth(Organ):
     def __init__(self, body_distance, rotation, capacity=10., mouth_radius=2):
         self.__graphic = MonoColouredOrganGraphic(self.get_mouth_shape, colours.TEAL)
 
-        def repaint(*args): self.__graphic.redraw_surface = True
+        def repaint(*args): self.__graphic.reblit = True
         self.__graphics_listener = repaint
         super().__init__("mouth", self.__graphics_listener, self.__graphics_listener)
         self.__body_distance = body_distance
@@ -1646,7 +1640,7 @@ class Mouth(Organ):
 
 class BodyGraphic(rendering.MonoColouredGraphic):
     def __init__(self, body, is_visible=True):
-        super().__init__(possibly_obstructed=True)
+        super().__init__()
         self.__is_visible = is_visible
         self.body = body
 
@@ -1668,9 +1662,9 @@ class BodyGraphic(rendering.MonoColouredGraphic):
 
     @is_visible.setter
     def is_visible(self, is_visible):
-        if is_visible is not self.__is_visible:
+        if is_visible != self.__is_visible:
             self.__is_visible = is_visible
-            self.redraw_surface = True
+            self.reblit = True
 
 
 class Body(Organ):
@@ -1699,9 +1693,14 @@ class Body(Organ):
             self.__graphic.redraw_surface = True
             if self.__highlight_graphic is not None:
                 self.__highlight_graphic.redraw_surface = True
+
+        def reblit(*args):
+            self.__graphic.reblit = True
+            if self.__highlight_graphic is not None:
+                self.__highlight_graphic.reblit = True
         self.mass_listeners.append(repaint)
-        self.position_listeners.append(repaint)
-        self.rotation_listeners.append(repaint)
+        self.position_listeners.append(reblit)
+        self.rotation_listeners.append(reblit)
 
     def highlight(self):
         if self.__highlight_graphic is None:
@@ -1762,12 +1761,13 @@ class Body(Organ):
 
     @mass.setter
     def mass(self, amount):
-        old_mass = self.__mass
-        amount = max(0, amount)
-        self.shape.radius = math.sqrt(amount / 2)
-        self.__mass = amount
-        for mass_listener in self.mass_listeners:
-            mass_listener(old_mass, amount)
+        if amount != self.__mass:
+            old_mass = self.__mass
+            amount = max(0, amount)
+            self.shape.radius = math.sqrt(amount / 2)
+            self.__mass = amount
+            for mass_listener in self.mass_listeners:
+                mass_listener(old_mass, amount)
 
     @property
     def center(self):

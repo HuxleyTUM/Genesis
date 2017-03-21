@@ -189,9 +189,7 @@ class AbsoluteCamera(Camera):
 
 
 class Canvas:
-    def __init__(self, back_ground_colour=colours.BLACK, possibly_obstructed=False):
-        self.possibly_obstructed = possibly_obstructed
-
+    def __init__(self, back_ground_colour=colours.BLACK):
         self.has_changed_listeners = []
 
         self.mouse_pressed_event_listeners = []
@@ -208,7 +206,17 @@ class Canvas:
         self.last_drawn_screen_box = None
         self.__back_ground_colour = back_ground_colour
         self.screen_boxes_to_update = []
-        self.__redraw_surface = True
+        self.__reblit = True
+
+    @property
+    def reblit(self):
+        return self.__reblit
+
+    @reblit.setter
+    def reblit(self, reblit):
+        self.__reblit = reblit
+        if self.parent_canvas is not None:
+            self.parent_canvas.redraw_children = True
 
     @property
     def redraw_surface(self):
@@ -218,9 +226,7 @@ class Canvas:
     def redraw_surface(self, redraw_surface):
         raise Exception("Not implemented!")
 
-    def reset_surface(self, global_bounding=None):
-        if global_bounding is None:
-            global_bounding = self.global_bounding_rectangle
+    def reset_surface(self, global_bounding):
         bounding_dimensions = global_bounding.dimensions
         dimensions = tuple(int(round(x)) for x in bounding_dimensions)
         if self.surface is None or all(x != y for x, y in zip(self.surface.get_size(), dimensions)):
@@ -232,43 +238,53 @@ class Canvas:
                 self.surface.fill(self.back_ground_colour)
             else:
                 self.surface.fill(colours.TRANSPARENT)
-    
-    def paint(self, screen_boxes_to_update, clipping_rectangle, outlines, global_bounding=None):
-        redraw = False
-        update = False
-        if self.redraw_surface:
-            update = True
-        elif (isinstance(self, Container) and self.redraw_children) or self.possibly_obstructed:
-            redraw = True
-        if redraw or update:
-            if global_bounding is None:
-                global_bounding = self.global_bounding_rectangle
-            drawn_screen_bounding = global_bounding.to_generous_int_bounding_box()
-            if update:
-                if self.last_drawn_screen_box is not None:
-                    self.__append_to_update_list(clipping_rectangle, self.last_drawn_screen_box, screen_boxes_to_update)
-                clipped_box = clipping_rectangle.clip_with_box(drawn_screen_bounding)
-                if clipped_box is not None:
-                    screen_boxes_to_update.append(clipped_box)
-                    outlines.append(clipped_box)
-            # boxes_to_outline.append(clipped_box)
-            self.last_drawn_screen_box = drawn_screen_bounding
-            self.redraw_surface = False
-            self.blit_to_parent(outlines, global_bounding)
-        for box in self.screen_boxes_to_update:
-            self.__append_to_update_list(global_bounding, box, screen_boxes_to_update)
-        self.screen_boxes_to_update = []
 
-    def __append_to_update_list(self, clipping, box, update_list):
+    def paint_to_parent(self, screen_boxes_to_update, outlines, parent_bounding, update_any=True):
+        draw = self.redraw_surface or (isinstance(self, Container) and self.redraw_children) and self.is_visible
+        blit = self.reblit or draw and self.is_visible
+        update_old = self.reblit and update_any
+        update_new = (self.redraw_surface or self.reblit) and update_any
+        # if type(self) is TextGraphic and type(self.parent_canvas) is ValueDisplay:
+        #     print((self.text, self.redraw_surface, self.reblit, update_any))
+        global_bounding = None
+        if draw or blit or update_new or len(self.screen_boxes_to_update) > 0:
+            global_bounding = self.global_bounding_rectangle
+        if update_new:
+            drawn_screen_bounding = global_bounding.to_generous_int_bounding_box()
+            clipped_box = parent_bounding.clip_with_box(drawn_screen_bounding)
+            if clipped_box is not None:
+                screen_boxes_to_update.append(clipped_box)
+                outlines.append(clipped_box)
+        else:
+            drawn_screen_bounding = None
+        if update_old and self.last_drawn_screen_box is not None:
+            self.__clip_and_append(parent_bounding, self.last_drawn_screen_box, screen_boxes_to_update)
+        if draw:
+            update_children = update_any and not update_new
+            self.paint_to_surface(screen_boxes_to_update, outlines, global_bounding, parent_bounding, update_children)
+        if blit:
+            if drawn_screen_bounding is None:
+                drawn_screen_bounding = global_bounding.to_generous_int_bounding_box()
+            self.last_drawn_screen_box = drawn_screen_bounding
+            self.blit_to_parent(outlines, global_bounding, parent_bounding)
+        if len(self.screen_boxes_to_update) > 0:
+            for box in self.screen_boxes_to_update:
+                self.__clip_and_append(global_bounding, box, screen_boxes_to_update)
+            self.screen_boxes_to_update = []
+
+        self.redraw_surface = False
+        self.reblit = False
+
+    def paint_to_surface(self, screen_boxes_to_update, outlines, global_bounding, parent_bounding, update_children=True):
+        self.reset_surface(global_bounding)
+
+    def __clip_and_append(self, clipping, box, append_to):
         clipped = clipping.clip_with_box(box)
         if clipped is not None:
-            update_list.append(clipped)
+            append_to.append(clipped)
 
-    def blit_to_parent(self, outlines, global_bounding=None):
-        if global_bounding is None:
-            global_bounding = self.global_bounding_rectangle
+    def blit_to_parent(self, outlines, global_bounding, parent_global):
         if self.parent_canvas is not None:
-            parent_global = self.parent_canvas.global_bounding_rectangle
             pos = (global_bounding.left - parent_global.left, global_bounding.down - parent_global.down)
             if type(self) is TextGraphic:
                 outlines.append(global_bounding.to_bounding_box())
@@ -280,15 +296,15 @@ class Canvas:
     #     bounding_rectangle.translate((-self.position[0], -self.position[1]))
     #     return self.parent_canvas.paint_text(label, bounding_rectangle, screen_delta, False)
 
+    def recalc_point(self, point, delta_x, delta_y, scale_x, scale_y):
+        return (point[0] - delta_x) * scale_x, (point[1] - delta_y) * scale_y
+
     def paint_shape(self, shape, colour, border_width, dimensions):
-        shape = copy.deepcopy(shape)
-        shape.dimensions = dimensions
-        shape.translate((-shape.left, -shape.down))
         if type(shape) is shapes.Circle:
             bounding_box = (0, 0, int(round(dimensions[0])), int(round(dimensions[1])))
             max_border_width = max(min(bounding_box[2], bounding_box[3]) - 1, 0)
             border_width = min(border_width, max_border_width)
-            dirty_rect = pygame.draw.ellipse(self.surface, colour, bounding_box, border_width)
+            pygame.draw.ellipse(self.surface, colour, bounding_box, border_width)
         elif type(shape) is shapes.Axis:
             axis = shape
             screen_pos_from = axis.center
@@ -296,16 +312,26 @@ class Canvas:
             screen_pos_from[axis.dimension] = 0
             screen = self.screen
             screen_pos_to[axis.dimension] = screen.dimensions[axis.dimension]
-            dirty_rect = pygame.draw.line(self.surface, colour, screen_pos_from, screen_pos_to, max(border_width, 1))
+            pygame.draw.line(self.surface, colour, screen_pos_from, screen_pos_to, max(border_width, 1))
         elif type(shape) is shapes.LineSegment:
-            dirty_rect = pygame.draw.line(self.surface, colour, shape.start_point, shape.end_point)
+            scale_x = dimensions[0] / shape.width if shape.width > 0 else 0
+            scale_y = dimensions[1] / shape.height if shape.height > 0 else 0
+            first = ((shape.start_point[0] - shape.left) * scale_x, (shape.start_point[1] - shape.down) * scale_y)
+            second = ((shape.end_point[0] - shape.left) * scale_x, (shape.end_point[1] - shape.down) * scale_y)
+            pygame.draw.line(self.surface, colour, first, second, border_width)
         elif type(shape) is shapes.Rectangle:
             bounding_box = (0, 0, dimensions[0], dimensions[1])
-            dirty_rect = pygame.draw.rect(self.surface, colour, bounding_box, border_width)
-        elif type(shape) is shapes.Polygon:
-            dirty_rect = pygame.draw.polygon(self.surface, colour, shape.points, border_width)
-        elif type(shape) is shapes.PointLine:
-            dirty_rect = pygame.draw.lines(self.surface, colour, False, shape.points, border_width)
+            pygame.draw.rect(self.surface, colour, bounding_box, border_width)
+        elif isinstance(shape, shapes.PointShape):
+            new_points = []
+            scale_x = dimensions[0] / shape.width
+            scale_y = dimensions[1] / shape.height
+            for point in shape.points:
+                new_points.append(self.recalc_point(point, shape.left, shape.down, scale_x, scale_y))
+            if type(shape) is shapes.Polygon:
+                pygame.draw.polygon(self.surface, colour, new_points, border_width)
+            elif type(shape) is shapes.PointLine:
+                pygame.draw.lines(self.surface, colour, False, new_points, border_width)
         else:
             raise "Unknown shape: " + str(type(shape))
 
@@ -364,7 +390,7 @@ class Canvas:
 
     def translate(self, delta):
         if delta[0] != 0 or delta[1] != 0:
-            self.redraw_surface = True
+            self.reblit = True
             pos = self.position
             self.position = (pos[0] + delta[0], pos[1] + delta[1])
 
@@ -443,12 +469,19 @@ class Canvas:
             return point_in_parent
 
     def transform_point_to_screen(self, point):
-        point = self.transform_point_to_parent(point)
-        return self.parent_canvas.transform_point_to_screen(point)
+        current_canvas = self
+        while current_canvas is not None:
+            point = current_canvas.transform_point_to_parent(point)
+            current_canvas = current_canvas.parent_canvas
+        return point
 
     def transform_shape_to_screen(self, shape, transform_shape=False):
-        shape = self.transform_shape_to_parent(shape, transform_shape)
-        return self.parent_canvas.transform_shape_to_screen(shape, True)
+        current_canvas = self
+        while current_canvas is not None:
+            shape = current_canvas.transform_shape_to_parent(shape, transform_shape)
+            current_canvas = current_canvas.parent_canvas
+            transform_shape = True
+        return shape
 
     def transform_shape_to_surface(self, shape, transform_shape=False):
         if not transform_shape:
@@ -460,7 +493,7 @@ class Canvas:
 
     def transform_shape_to_parent(self, shape, transform_shape=False):
         if not transform_shape:
-            shape = copy.copy(shape)
+            shape = copy.deepcopy(shape)
         shape.translate(self.position)
         return shape
 
@@ -472,24 +505,27 @@ class Canvas:
 
 
 class Container(Canvas):
-    def __init__(self, local_bounding_rectangle, back_ground_colour=colours.BLACK, possibly_obstructed=False):
-        super().__init__(back_ground_colour, possibly_obstructed=False)
+    def __init__(self, local_bounding_rectangle, back_ground_colour=colours.BLACK, children_overlap=False):
+        super().__init__(back_ground_colour)
         self.__local_bounding_rectangle = local_bounding_rectangle
         self.__children = []
         self.__is_visible = True
         self.__redraw_children = True
         self.__redraw_surface = True
         self.__surface = None
+        self.__children_overlap = children_overlap
 
-    def paint(self, screen_boxes_to_update, clipping_rectangle, outlines, global_bounding=None):
-        if self.is_visible and (self.redraw_children or self.redraw_surface or self.possibly_obstructed):
-            if global_bounding is None and (self.redraw_children or self.redraw_surface):
-                global_bounding = self.global_bounding_rectangle
-            self.reset_surface(global_bounding)
-            for child in self.children:
-                child.paint(screen_boxes_to_update, global_bounding, outlines)
-            Canvas.paint(self, screen_boxes_to_update, clipping_rectangle, outlines, global_bounding)
-            self.__redraw_children = False
+    def paint_to_surface(self, screen_boxes_to_update, outlines, global_bounding, parent_bounding, update_children=True):
+        self.reset_surface(global_bounding)
+        # if type(self) is Screen:
+        #     print((self.reblit, self.redraw_surface, self.__children_overlap))
+        for child in self.children:
+            # if type(self) is Screen:
+            #     print("\t"+str((child.reblit, child.redraw_surface, child.__children_overlap)))
+            if self.__children_overlap:
+                child.reblit = True
+            child.paint_to_parent(screen_boxes_to_update, outlines, global_bounding, update_children)
+        self.__redraw_children = False
 
     @property
     def redraw_children(self):
@@ -515,12 +551,11 @@ class Container(Canvas):
 
     @redraw_surface.setter
     def redraw_surface(self, redraw_surface):
-        # if self.__redraw_surface is not redraw_surface:
         self.__redraw_surface = redraw_surface
         if redraw_surface:
             self.redraw_children = True
             for canvas in self.children:
-                canvas.redraw_surface = True
+                canvas.reblit = True
 
     @property
     def is_visible(self):
@@ -558,10 +593,7 @@ class Container(Canvas):
 
     def translate(self, delta):
         if delta[0] != 0 or delta[1] != 0:
-            if self.back_ground_colour is not None:
-                self.redraw_surface = True
-            else:
-                self.redraw_children = True
+            self.reblit = True
             pos = self.position
             self.position = (pos[0] + delta[0], pos[1] + delta[1])
 
@@ -582,8 +614,8 @@ class Container(Canvas):
 
     def add_canvas(self, canvas, position=None, canvas_index=None):
         canvas.parent_canvas = self
-        if canvas.redraw_surface or (isinstance(canvas, Container) and canvas.redraw_children):
-            self.redraw_children = True
+        # if canvas.redraw_surface or (isinstance(canvas, Container) and canvas.redraw_children):
+        self.redraw_children = True
         if position is not None:
             canvas.position = position
         if canvas_index is None:
@@ -630,8 +662,8 @@ class Container(Canvas):
 class SimpleContainer(Container):
     def __init__(self, local_bounding_rectangle, camera=RelativeCamera(), back_ground_area=None,
                  border_width=1, border_colour=None, back_ground_colour=colours.BLACK,
-                 possibly_obstructed=False):
-        super().__init__(local_bounding_rectangle, back_ground_colour, possibly_obstructed=possibly_obstructed)
+                 children_overlap=False):
+        super().__init__(local_bounding_rectangle, back_ground_colour, children_overlap=children_overlap)
         self.__border_colour = border_colour
         self.__border_width = border_width
         self.__parent_canvas = None
@@ -668,8 +700,7 @@ class SimpleContainer(Container):
     def __set_border(self, border_colour, border_width):
         if border_colour is not None and border_width > 0:
             if self.__border_graphic is None:
-                self.__border_graphic = SimpleOutlineGraphic(self.__back_ground_area, border_colour, border_width,
-                                                             possibly_obstructed=True)
+                self.__border_graphic = SimpleOutlineGraphic(self.__back_ground_area, border_colour, border_width)
                 self.add_canvas(self.__border_graphic)
             else:
                 self.__border_graphic.border_colour = border_colour
@@ -735,7 +766,7 @@ class SimpleContainer(Container):
 
 class AtomicGraphic(Canvas):
     def __init__(self, possibly_obstructed=False):
-        super().__init__(back_ground_colour=None, possibly_obstructed=possibly_obstructed)
+        super().__init__(back_ground_colour=None)
         self.__parent_canvas = None
         self.__redraw_surface = True
 
@@ -830,9 +861,9 @@ class TextGraphic(AtomicGraphic):
 
     @font_size.setter
     def font_size(self, font_size):
-        if self.font_size is not font_size:
+        if self.__font_size != font_size:
             self.__font_size = font_size
-            self.__rerender_label()
+            self.redraw_surface = True
 
     @property
     def font_type(self):
@@ -840,9 +871,9 @@ class TextGraphic(AtomicGraphic):
 
     @font_type.setter
     def font_type(self, font_type):
-        if self.__font_type is not font_type:
+        if self.__font_type != font_type:
             self.font_type = font_type
-            self.__rerender_label()
+            self.redraw_surface = True
 
     @property
     def surface(self):
@@ -886,12 +917,12 @@ class TextGraphic(AtomicGraphic):
     def text_colour(self, text_colour):
         if any(x != y for x, y in zip(self.__text_colour, text_colour)):
             self.__text_colour = text_colour
-            self.__rerender_label()
+            self.redraw_surface = True
 
     def translate(self, delta):
         if delta[0] != 0 or delta[1] != 0:
             self.__local_bounding_rectangle.translate(delta)
-            self.redraw_surface = True
+            self.reblit = True
 
     @property
     def text(self):
@@ -899,9 +930,9 @@ class TextGraphic(AtomicGraphic):
 
     @text.setter
     def text(self, text):
-        if text is not self.__text:
+        if text != self.__text:
             self.__text = text
-            self.__rerender_label()
+            self.redraw_surface = True
 
     def __rerender_label(self):
         if self.cache_values:
@@ -910,7 +941,7 @@ class TextGraphic(AtomicGraphic):
             font = Fonts.font(self.__font_type, self.__font_size)
             self.__pyg_label = font.render(self.__text, 1, self.__text_colour)
         self.__local_bounding_rectangle.dimensions = self.__pyg_label.get_size()
-        self.redraw_surface = True
+        self.reblit = True
 
     @property
     def is_visible(self):
@@ -918,18 +949,17 @@ class TextGraphic(AtomicGraphic):
 
     @is_visible.setter
     def is_visible(self, is_visible):
-        if is_visible is not self.__is_visible:
+        if is_visible != self.__is_visible:
             self.__is_visible = is_visible
             self.redraw_surface = True
 
-    def paint(self, screen_boxes_to_update, clipping_rectangle, outlines, global_bounding=None):
-        if self.is_visible:
-            Canvas.paint(self, screen_boxes_to_update, clipping_rectangle, outlines, global_bounding)
+    def paint_to_surface(self, screen_boxes_to_update, outlines, global_bounding, parent_bounding, update_children=True):
+        self.__rerender_label()
 
 
 class ShapedGraphic(AtomicGraphic):
     def __init__(self, possibly_obstructed=False):
-        super().__init__(possibly_obstructed=possibly_obstructed)
+        super().__init__()
         self.__surface = None
 
     @property
@@ -971,7 +1001,7 @@ class ShapedGraphic(AtomicGraphic):
     def translate(self, delta):
         if delta[0] != 0 or delta[1] != 0:
             self.shape.translate(delta)
-            self.redraw_surface = True
+            self.reblit = True
 
     @property
     def is_visible(self):
@@ -984,7 +1014,7 @@ class ShapedGraphic(AtomicGraphic):
 
 class OutlineGraphic(ShapedGraphic):
     def __init__(self, possibly_obstructed=False):
-        super().__init__(possibly_obstructed=possibly_obstructed)
+        super().__init__()
 
     @property
     def border_colour(self):
@@ -1018,18 +1048,14 @@ class OutlineGraphic(ShapedGraphic):
     def is_visible(self, value):
         raise Exception("Not implemented in "+str(type(self)))
     
-    def paint(self, screen_boxes_to_update, clipping_rectangle, outlines, global_bounding=None):
-        if self.is_visible and (self.redraw_surface or self.possibly_obstructed):
-            if global_bounding is None:
-                global_bounding = self.global_bounding_rectangle
-            self.reset_surface(global_bounding)
-            self.paint_shape(self.shape, self.border_colour, self.border_width, global_bounding.dimensions)
-            Canvas.paint(self, screen_boxes_to_update, clipping_rectangle, outlines, global_bounding)
+    def paint_to_surface(self, screen_boxes_to_update, outlines, global_bounding, parent_bounding, update_children=True):
+        self.reset_surface(global_bounding)
+        self.paint_shape(self.shape, self.border_colour, self.border_width, global_bounding.dimensions)
 
 
 class SimpleOutlineGraphic(OutlineGraphic):
-    def __init__(self, shape, border_colour, border_width=1, is_visible=True, possibly_obstructed=False):
-        super().__init__(possibly_obstructed=possibly_obstructed)
+    def __init__(self, shape, border_colour, border_width=1, is_visible=True):
+        super().__init__()
         self.__is_visible = is_visible
         self._border_width = border_width
         self._border_colour = border_colour
@@ -1068,14 +1094,14 @@ class SimpleOutlineGraphic(OutlineGraphic):
 
     @is_visible.setter
     def is_visible(self, is_visible):
-        if is_visible is not self.__is_visible:
+        if is_visible != self.__is_visible:
             self.__is_visible = is_visible
-            self.redraw_surface = True
+            self.reblit = True
 
 
 class MonoColouredGraphic(ShapedGraphic):
-    def __init__(self, possibly_obstructed=False):
-        super().__init__(possibly_obstructed=possibly_obstructed)
+    def __init__(self):
+        super().__init__()
 
     @property
     def fill_colour(self):
@@ -1101,13 +1127,9 @@ class MonoColouredGraphic(ShapedGraphic):
     def is_visible(self, value):
         raise Exception("Not implemented in "+str(type(self)))
     
-    def paint(self, screen_boxes_to_update, clipping_rectangle, outlines, global_bounding=None):
-        if self.is_visible and (self.redraw_surface or self.possibly_obstructed):
-            if global_bounding is None:
-                global_bounding = self.global_bounding_rectangle
-            self.reset_surface(global_bounding)
-            self.paint_shape(self.shape, self.fill_colour, 0, global_bounding.dimensions)
-            Canvas.paint(self, screen_boxes_to_update, clipping_rectangle, outlines, global_bounding)
+    def paint_to_surface(self, screen_boxes_to_update, outlines, global_bounding, parent_bounding, update_children=True):
+        self.reset_surface(global_bounding)
+        self.paint_shape(self.shape, self.fill_colour, 0, global_bounding.dimensions)
 
 
 class SimpleMonoColouredGraphic(MonoColouredGraphic):
@@ -1141,9 +1163,8 @@ class SimpleMonoColouredGraphic(MonoColouredGraphic):
 
     @is_visible.setter
     def is_visible(self, is_visible):
-        if is_visible is not self.__is_visible:
+        if is_visible != self.__is_visible:
             self.__is_visible = is_visible
-            self.redraw_surface = True
 
 
 class Table(SimpleContainer):
@@ -1374,6 +1395,18 @@ class Screen(Container):
         self.redraw_surface = False
         self.visualize_boundings = False
 
+    def paint(self):
+        screen_boxes_to_update = []
+        outlines = []
+        rectangle = self.global_bounding_rectangle
+        self.paint_to_parent(screen_boxes_to_update, outlines, rectangle)
+        if self.visualize_boundings:
+            for outline in outlines:
+                pygame.draw.rect(self.surface, colours.RED, outline, 1)
+        self.py_screen.blit(self.surface, (0, 0))
+        # print(screen_boxes_to_update)
+        return screen_boxes_to_update
+
     @property
     def global_bounding_rectangle(self):
         return self.local_bounding_rectangle
@@ -1478,7 +1511,8 @@ class PyGameRenderer(Renderer):
 
     def visualize_boundings(self, *args):
         self.__visualize_boundings = not self.__visualize_boundings
-        self.screen.redraw_surface = True
+        # if not self.__visualize_boundings:
+        #     self.screen.redraw_surface = True
 
     def render(self):
         if self.render_clock is not None:
@@ -1504,12 +1538,9 @@ class PyGameRenderer(Renderer):
         if clock is not None:
             clock.tick()
         boxes = frame.rects_to_update
-        outlines = []
-        self.screen.paint(boxes, self.screen.global_bounding_rectangle, outlines)
-        if self.__visualize_boundings:
-            for outline in outlines:
-                pygame.draw.rect(self.screen.surface, colours.RED, outline, 1)
-        self.screen.py_screen.blit(self.screen.surface, (0, 0))
+        self.screen.visualize_boundings = self.__visualize_boundings
+        boxes += self.screen.paint()
+
         pygame.display.update(boxes)
 
         if clock is not None:

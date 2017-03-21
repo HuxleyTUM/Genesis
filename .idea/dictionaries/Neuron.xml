@@ -2,6 +2,8 @@
   <dictionary name="Neuron">
     <words>
       <w>pygame</w>
+      <w>reblit</w>
+      <w>rerender</w>
     </words>
   </dictionary>
 </component>

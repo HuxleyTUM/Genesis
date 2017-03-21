@@ -286,7 +286,7 @@ class Circle(Shape):
             raise Exception("Not implemented!")
 
     def point_lies_within(self, point):
-        distance = numpy.linalg.norm([self.__center[0] - point[0], self.__center[1] - point[1]])
+        distance = numpy.linalg.norm((self.__center[0] - point[0], self.__center[1] - point[1]))
         return distance < self.__radius
 
     def collides(self, other):
@@ -297,7 +297,9 @@ class Circle(Shape):
         return circle_offset + self.__radius > axis.offset > circle_offset - self.__radius
 
     def collides_with_circle(self, circle):
-        distance = numpy.linalg.norm([self.__center[0] - circle.center_x, self.__center[1] - circle.center_y])
+        if not self.bounding_boxes_collide(circle):
+            return False
+        distance = numpy.linalg.norm((self.__center[0] - circle.center_x, self.__center[1] - circle.center_y))
         return distance < self.__radius + circle.radius
 
     def collides_with_line_segment(self, line_segment):
@@ -471,6 +473,16 @@ class Rectangle(Shape):
 
     def __str__(self):
         return str((self.left, self.down, self.width, self.height))
+
+    def __getitem__(self, item):
+        if item == 0:
+            return self.__left
+        elif item == 1:
+            return self.__down
+        elif item == 2:
+            return self.__width
+        elif item == 3:
+            return self.__height
 
     def has_area(self):
         return True
