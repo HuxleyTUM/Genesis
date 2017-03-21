@@ -856,7 +856,7 @@ class Creature(StageObject):
                 self.__brain = organ
                 for old_organ in self.__organs:
                     if old_organ is not self.__brain:
-                        self.__brain.wire_organ(old_organ)
+                        self.__brain.wire_organ(old_organ, mutation_model)
             self.__organs.append(organ)
             if organ.creature is None:
                 organ.creature = self
@@ -1210,6 +1210,16 @@ class Neuron:
     def get_weight(self, target_neuron):
         return self._connections[target_neuron]
 
+    def mutate(self, mutation_model):
+        if not self.is_bias and random.random() < mutation_model.mutation_likelihood:
+            random_value = random.random()
+            if random_value < 0.7:
+                self._activation_function = sigmoid_activation
+            elif random_value < 0.9:
+                self._activation_function = gaussian_activation
+            else:
+                self._activation_function = binary_activation
+
 
 class InputNeuron(Neuron):
     def __init__(self, label=None):
@@ -1287,12 +1297,12 @@ class Brain(Organ):
     def add_input_neuron(self, neuron, mutation_model=None):
         self.__input_layer.append(neuron)
         neuron.connect_to_layer(self.__hidden_layer, mutation_model=mutation_model)
-        self.fill_hidden_layer(len(self.__input_layer))
+        self.fill_hidden_layer(len(self.__input_layer), mutation_model)
 
     def add_output_neuron(self, neuron, mutation_model=None):
         self.__output_layer.append(neuron)
         Brain._connect_layer_to_neuron(self.__hidden_layer, neuron, mutation_model=mutation_model)
-        self.fill_hidden_layer(len(self.__output_layer))
+        self.fill_hidden_layer(len(self.__output_layer), mutation_model)
 
     def remove_input_neuron(self, input_neuron):
         self.__input_layer.remove(input_neuron)
@@ -1302,24 +1312,19 @@ class Brain(Organ):
             hidden_neuron.disconnect_from_neuron(output_neuron)
         self.__output_layer.remove(output_neuron)
 
-    def add_hidden_neuron(self, neuron=None):
+    def add_hidden_neuron(self, neuron=None, mutation_model=None):
         if neuron is None:
-            random_value = random.random()
-            if random_value < 0.7:
-                activation = sigmoid_activation
-            elif random_value < 0.9:
-                activation = gaussian_activation
-            else:
-                activation = binary_activation
-            neuron = Neuron(activation, "hidden " + str(len(self.__hidden_layer)))
+            neuron = Neuron(identity_activation, "hidden " + str(len(self.__hidden_layer)))
         self.__hidden_layer.append(neuron)
         if not neuron.is_bias:
-            Brain._connect_layer_to_neuron(self.__input_layer, neuron)
-        neuron.connect_to_layer(self.__output_layer)
+            Brain._connect_layer_to_neuron(self.__input_layer, neuron, mutation_model=mutation_model)
+        neuron.connect_to_layer(self.__output_layer, mutation_model=mutation_model)
+        if mutation_model is not None:
+            neuron.mutate(mutation_model)
 
-    def fill_hidden_layer(self, count):
+    def fill_hidden_layer(self, count, mutation_model=None):
         for i in range(len(self.__hidden_layer), count):
-            self.add_hidden_neuron()
+            self.add_hidden_neuron(mutation_model=mutation_model)
 
     @staticmethod
     def _connect_layer_to_neuron(layer, neuron, weight=0, mutation_model=None):
@@ -1333,7 +1338,7 @@ class Brain(Organ):
     def think_in_thread(self):
         """Computes the values for the output neurons with the given inputs in the input neurons.
 
-        This operation is non blocking"""
+        This operation is blocking"""
         # self.__lock_1.acquire()
         # self.__lock_0.release()
         self.think()
@@ -1400,6 +1405,9 @@ class Brain(Organ):
                             else:
                                 weight += random_from_interval(-strength, strength)
                         neuron_from.connect_to_neuron(neuron_to, weight)
+        for neuron in self.hidden_layer:
+            neuron.mutate(mutation_model)
+
 
     def kill(self):
         """Unlocks all locks in this organ so that the thinking thread can terminate."""
