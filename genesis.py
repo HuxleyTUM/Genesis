@@ -1293,6 +1293,11 @@ class Brain(Organ):
                     if from_neuron_other.has_weight(to_neuron_other):
                         weight = from_neuron_other.get_weight(to_neuron_other)
                         from_neuron_this.connect_to_neuron(to_neuron_this, weight)
+        for layer_index in range(len(self.__layers)):
+            layer_this = self.__layers[layer_index]
+            layer_other = other_brain.layers[layer_index]
+            for neuron_this, neuron_other in zip(layer_this, layer_other):
+                neuron_this._activation_function = neuron_other._activation_function
 
     def add_input_neuron(self, neuron, mutation_model=None):
         self.__input_layer.append(neuron)
